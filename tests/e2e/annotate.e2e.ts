@@ -109,7 +109,7 @@ try {
     assert.doesNotMatch(listNote.mark.anchor.selector, /^html/, "selector fell back to the full path");
     assert.match(listNote.mark.anchor.selector, /li:nth-of-type\(2\)$/);
     assert.equal(stored.length, 2, "Escape during capture must not save a note");
-    const leftovers = (await evaluateInExtension(direct, EXTENSION_ID, `chrome.storage.local.getKeys().then((k) => k.filter((x) => x.startsWith("draft:") || x.startsWith("ann:")).length)`)) as number;
+    const leftovers = (await evaluateInExtension(direct, EXTENSION_ID, `chrome.storage.local.getKeys().then((k) => k.filter((x) => x.startsWith("draft:") || x.startsWith("ann:") || x.startsWith("res:")).length)`)) as number;
     assert.equal(leftovers, 0, "a draft or a queued note was left in the browser");
     assert.equal(note.comment, "Le bouton déborde de sa carte sur cette largeur.");
     assert.equal(note.mark.anchor.selector, "#acheter");

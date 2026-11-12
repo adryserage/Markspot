@@ -131,7 +131,7 @@ test("editComment bumps the revision, and a resolved note no longer changes", as
   assert.equal((await host.editComment("01JD8ZZZZZZZZZZZZZZZZZZZZZ" as AnnotationId, "x")).kind, "not_found");
 });
 
-test("clearResolved removes only the resolved notes it is given", async () => {
+test("clearNotes removes resolved notes, and open ones only with includeOpen", async () => {
   const cfg = await config();
   const host = await openHostStore(cfg);
   const open = newAnnotation();
@@ -139,8 +139,28 @@ test("clearResolved removes only the resolved notes it is given", async () => {
   await host.create(open, pngs);
   await host.create(done, pngs);
   await (await openAgentStore(cfg)).resolve(done.id, "Fait", agent);
-  assert.deepEqual(await host.clearResolved([open.id, done.id]), [done.id]);
+  assert.deepEqual(await host.clearNotes([open.id, done.id], { includeOpen: false }), [done.id]);
   assert.deepEqual((await host.list()).map((t) => t.annotation.id), [open.id]);
+  assert.deepEqual(await host.clearNotes([open.id], { includeOpen: true }), [open.id]);
+  assert.deepEqual(await host.list(), []);
+});
+
+test("the user resolves and reopens a note; a stale reopen keeps a newer reply", async () => {
+  const cfg = await config();
+  const host = await openHostStore(cfg);
+  const note = newAnnotation();
+  await host.create(note, pngs);
+  const user = { kind: "user", id: "local", name: "local" } as const;
+  const resolved = await host.resolve(note.id, "Réglée à la main.", user);
+  assert.equal(resolved.kind, "resolved");
+  const seen = resolved.kind === "resolved" ? resolved.thread.resolution!.resolvedAt : "";
+  assert.equal((await host.reopen(note.id, seen)).kind, "reopened");
+  assert.equal((await host.get(note.id))?.resolution, null);
+  // Claude répond, puis un « Rouvrir » en retard qui visait l'ancienne réponse ne retire rien.
+  await new Promise((r) => setTimeout(r, 5)); // dates à la milliseconde : deux réponses distinctes
+  await (await openAgentStore(cfg)).resolve(note.id, "Corrigé par Claude", agent);
+  assert.equal((await host.reopen(note.id, seen)).kind, "changed");
+  assert.equal((await host.get(note.id))?.resolution?.reply, "Corrigé par Claude");
 });
 
 test("an id with a path inside is refused", () => {

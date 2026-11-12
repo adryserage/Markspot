@@ -21,8 +21,12 @@ export type ExtensionToHost =
   | { type: "capture"; requestId: number; id: AnnotationId }
   /** Nouveau commentaire ; refusé si la note est déjà réglée. */
   | { type: "edit"; requestId: number; id: AnnotationId; comment: string }
-  /** Retire ces notes si elles sont réglées ; les autres restent. */
-  | { type: "clear"; requestId: number; ids: AnnotationId[] };
+  /** Retire ces notes : les réglées seulement, ou toutes avec includeOpen. */
+  | { type: "clear"; requestId: number; ids: AnnotationId[]; includeOpen?: boolean }
+  /** La personne règle la note à la main. */
+  | { type: "resolve"; requestId: number; id: AnnotationId; reply: string }
+  /** Rouvre la note si sa résolution est toujours celle de resolvedAt. */
+  | { type: "reopen"; requestId: number; id: AnnotationId; resolvedAt: string };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
@@ -31,6 +35,8 @@ export type HostReply =
   | { type: "capture"; requestId: number; png: string | null }
   | { type: "edited"; requestId: number; thread: Thread }
   | { type: "cleared"; requestId: number; ids: AnnotationId[] }
+  | { type: "resolved"; requestId: number; thread: Thread }
+  | { type: "reopened"; requestId: number; thread: Thread }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =

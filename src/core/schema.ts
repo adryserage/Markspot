@@ -111,5 +111,17 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
     id: AnnotationIdSchema,
     comment: z.string().min(1).max(COMMENT_MAX),
   }),
-  z.object({ type: z.literal("clear"), requestId: z.number().int(), ids: z.array(AnnotationIdSchema).max(500) }),
+  z.object({
+    type: z.literal("clear"),
+    requestId: z.number().int(),
+    ids: z.array(AnnotationIdSchema).max(500),
+    includeOpen: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("resolve"),
+    requestId: z.number().int(),
+    id: AnnotationIdSchema,
+    reply: z.string().min(1).max(REPLY_MAX),
+  }),
+  z.object({ type: z.literal("reopen"), requestId: z.number().int(), id: AnnotationIdSchema, resolvedAt: z.iso.datetime() }),
 ]);

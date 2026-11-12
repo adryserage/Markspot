@@ -9,11 +9,15 @@ export interface MenuActions {
   /** Rend un message d'erreur, ou null si c'est enregistré. */
   edit(note: NoteView, comment: string): Promise<string | null>;
   clearResolved(notes: NoteView[]): Promise<string | null>;
+  clearAll(notes: NoteView[]): Promise<string | null>;
+  /** Marque la note réglée (true) ou la rouvre (false). */
+  setResolved(note: NoteView, resolved: boolean): Promise<string | null>;
 }
 
 export type NoteState = "pending" | "open" | "resolved";
 export const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
-export const stateOf = (note: NoteView): NoteState => (note.pending ? "pending" : note.resolution ? "resolved" : "open");
+/** Une note réglée s'affiche réglée, même si elle attend encore le programme local. */
+export const stateOf = (note: NoteView): NoteState => (note.resolution ? "resolved" : note.pending ? "pending" : "open");
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -28,6 +32,11 @@ export class NotesMenu {
   readonly #panel = el("div", "menu-panel");
   readonly #list = el("ol", "menu-list");
   readonly #clear = el("button", "ghost menu-clear", "Effacer les notes réglées");
+  readonly #clearAll = el("button", "ghost menu-clear danger", "Tout effacer sur cette page");
+  readonly #confirm = el("div", "menu-confirm");
+  readonly #confirmText = el("p", "", "");
+  readonly #no = el("button", "primary", "Non, garder");
+  readonly #yes = el("button", "ghost danger", "Oui, effacer");
   readonly #message = el("p", "hint");
   #notes: NoteView[] = [];
   #open = false;
@@ -40,16 +49,33 @@ export class NotesMenu {
     this.#toggle.setAttribute("aria-expanded", "false");
     this.#toggle.addEventListener("click", () => this.#setOpen(!this.#open));
     this.#clear.type = "button";
-    this.#clear.addEventListener("click", () => void this.#clearResolved());
+    this.#clear.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#clearResolved();
+    });
+    this.#clearAll.type = "button";
+    this.#clearAll.addEventListener("click", (e) => {
+      if (e.isTrusted) this.#askClearAll();
+    });
+    this.#no.type = "button";
+    this.#yes.type = "button";
+    this.#no.addEventListener("click", () => this.#cancelClearAll());
+    this.#yes.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#doClearAll();
+    });
+    // « Oui » à gauche, sous le texte : un double-clic sur « Tout effacer » ne le touche pas.
+    const answers = el("div", "actions");
+    answers.append(this.#yes, this.#no);
+    this.#confirm.append(this.#confirmText, answers);
+    this.#confirm.hidden = true;
     this.#panel.hidden = true;
-    this.#panel.append(this.#list, this.#message, this.#clear);
+    this.#panel.append(this.#list, this.#message, this.#clear, this.#clearAll, this.#confirm);
     this.element.append(this.#toggle, this.#panel);
     this.update([]);
   }
 
-  /** Une modification est en cours : Échap doit d'abord l'annuler. */
+  /** Une modification ou une confirmation est en cours : Échap doit d'abord l'annuler. */
   get editing(): boolean {
-    return this.#editing;
+    return this.#editing || !this.#confirm.hidden;
   }
 
   update(notes: NoteView[]): void {
@@ -57,18 +83,47 @@ export class NotesMenu {
     this.#toggle.textContent = notes.length === 1 ? "1 note" : `${notes.length} notes`;
     this.#toggle.disabled = notes.length === 0;
     this.#clear.hidden = !notes.some((n) => stateOf(n) === "resolved");
+    this.#clearAll.hidden = notes.length === 0;
+    this.#cancelClearAll();
     if (notes.length === 0) this.#setOpen(false);
     if (this.#open && !this.#editing) this.#render();
   }
 
   close(): void {
     this.#editing = false;
+    this.#cancelClearAll();
     this.#setOpen(false);
   }
 
   cancelEdit(): void {
     this.#editing = false;
+    this.#cancelClearAll();
     this.#render();
+  }
+
+  #askClearAll(): void {
+    const n = this.#notes.length;
+    this.#confirmText.textContent =
+      n === 1
+        ? "Effacer la note de cette page ? Elle disparaît pour de bon."
+        : `Effacer les ${n} notes de cette page ? Elles disparaissent pour de bon, même celles qui ne sont pas réglées.`;
+    this.#clearAll.hidden = true;
+    this.#confirm.hidden = false;
+    this.#no.focus();
+  }
+
+  #cancelClearAll(): void {
+    this.#confirm.hidden = true;
+    this.#clearAll.hidden = this.#notes.length === 0;
+  }
+
+  async #doClearAll(): Promise<void> {
+    this.#yes.disabled = true;
+    const error = await this.actions.clearAll(this.#notes);
+    this.#yes.disabled = false;
+    this.#cancelClearAll();
+    this.#message.textContent = error ? `Non effacé : ${error}` : "";
+    this.#message.classList.toggle("error", Boolean(error));
   }
 
   #setOpen(open: boolean): void {
@@ -96,6 +151,17 @@ export class NotesMenu {
     go.addEventListener("click", () => this.actions.goTo(note));
     const side = el("div", "menu-side");
     side.append(el("span", `state ${state}`, STATE_LABEL[state]));
+    const toggle = el("button", "ghost small", state === "resolved" ? "Rouvrir" : "Marquer réglée");
+    toggle.type = "button";
+    toggle.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      toggle.disabled = true;
+      const error = await this.actions.setResolved(note, state !== "resolved");
+      toggle.disabled = false;
+      this.#message.textContent = error ? `Non changé : ${error}` : "";
+      this.#message.classList.toggle("error", Boolean(error));
+    });
+    side.append(toggle);
     if (state !== "resolved") {
       const edit = el("button", "ghost small", "Modifier");
       edit.type = "button";
