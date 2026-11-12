@@ -202,7 +202,7 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
       continue;
     }
     const group = others.filter(
-      (l) => (dispatch.to === undefined || l.name === dispatch.to) && (dispatch.toHost === undefined || l.host === dispatch.toHost),
+      (l) => (dispatch.to === undefined || l.name === dispatch.to) && (dispatch.toHost === undefined || cleanName(l.host) === dispatch.toHost),
     );
     if (chooseListener([...group, me], dispatch.url)?.id !== me.id && age < GRACE_MS) continue;
     const claimed = join(paths.claimed, `${dispatch.id}-${me.id}.json`);
