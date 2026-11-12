@@ -75,6 +75,29 @@ Options :
 
 Les notes sont rangées dans `%LOCALAPPDATA%\markspot` sous Windows, `~/Library/Application Support/markspot` sous macOS et `~/.local/share/markspot` sous Linux.
 
+## Envoyer les notes à Claude
+
+Dans la page, le bouton « Envoyer à Claude » envoie les notes ouvertes à une session Claude Code. La liste « Envoyer à » montre les sessions qui écoutent, avec le nom de leur projet (le nom du dossier de la session). Le choix est gardé par site, et « Rafraîchir » relit la liste. Un envoi attend 24 heures que la session choisie écoute.
+
+Une session écoute de deux façons.
+
+### Mode écoute (par défaut)
+
+Dis « écoute mes annotations » à la session. Claude lance `markspot listen --name <projet>` en tâche de fond : l'attente ne coûte rien, et la commande se termine quand des notes arrivent. Claude les règle, puis relance l'écoute. Il faut le redire dans chaque nouvelle session.
+
+### Réveil automatique (aperçu de recherche)
+
+Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes. Plus besoin de `markspot listen`.
+
+Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche. Pour un serveur qui n'est pas un plugin approuvé par Anthropic, Claude Code ne les ouvre qu'avec le drapeau `--dangerously-load-development-channels server:markspot`, que `markspot claude` ajoute pour toi :
+
+- au lancement, Claude Code affiche un avertissement et demande de confirmer « I am using this for local development » ;
+- le drapeau est prévu pour le développement : sa forme peut changer d'une version de Claude Code à l'autre ;
+- la voie normale, `--channels`, n'accepte que les plugins approuvés par Anthropic. Markspot ne l'est pas, donc le mode écoute reste le mode par défaut ;
+- il faut une session interactive (pas `claude -p`) et une connexion claude.ai ou une clé de la Console ; dans une organisation Team ou Enterprise, un administrateur doit activer les canaux.
+
+Le message poussé dans la session contient le numéro, l'identifiant et le commentaire de chaque note, rien d'autre : Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
+
 ## Deux postes, un seul dossier de notes
 
 Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
@@ -83,7 +106,7 @@ Pour annoter sur un poste et laisser Claude Code régler les notes depuis un aut
 node dist/cli.js install --browser all --data-dir \\serveur\partage\.local\share\markspot
 ```
 
-Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage. Dans Claude Code, « écoute mes annotations » lance le mode écoute : Claude démarre `markspot listen` en tâche de fond, qui attend sans rien coûter. Dans la page, le bouton « Envoyer à Claude » envoie les notes ouvertes à la session choisie dans « Envoyer à » (chaque session qui écoute s'annonce avec le nom de son projet ; le choix est gardé par site) ; Claude les règle, puis se remet à l'écoute. Un envoi au projet choisi attend 24 heures que sa session écoute.
+Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage.
 
 ## Ajouter un navigateur
 
