@@ -1,17 +1,24 @@
 // install, uninstall et doctor. Chaque étape lit l'état avant d'écrire :
 // relancer install ne change rien, uninstall défait chaque étape.
 
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { chmod, lstat, mkdir, readFile, readlink, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { currentPlatform, pathsFor } from "../core/paths.ts";
 import { HOST_NAME } from "../core/protocol.ts";
+import { BROWSER_IDS, hostTargets, isBrowserId, type BrowserId } from "./browsers.ts";
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
+import { launcherFor } from "./launcher.ts";
 
 export interface Settings {
-  /** Profil Chrome où l'hôte natif est déclaré. */
-  chromeProfile: string;
-  /** Port de débogage de ce Chrome, pour charger l'extension et la vérifier. */
-  cdpUrl: string;
+  /** Navigateurs où déclarer l'hôte natif (voir browsers.ts). */
+  browsers: BrowserId[];
+  /** Profil lancé avec --user-data-dir (Chrome dédié aux essais, par exemple). */
+  chromeProfile?: string;
+  /** Port de débogage d'un Chrome, pour y charger l'extension et la vérifier sans clic. */
+  cdpUrl?: string;
 }
 
 export interface Context extends Settings {
@@ -19,6 +26,8 @@ export interface Context extends Settings {
   extensionDir: string;
   cliPath: string;
   nodePath: string;
+  /** Dossier skill/ du paquet, lié dans ~/.claude/skills/markspot. */
+  skillDir: string;
 }
 
 export interface InstallStep {
@@ -26,20 +35,26 @@ export interface InstallStep {
   satisfied(): Promise<boolean>;
   apply(): Promise<void>;
   revert(): Promise<void>;
+  /** Étape à faire à la main : install affiche ce texte au lieu d'écrire. */
+  manual?: string;
 }
 
-const CONFIG_FILE = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "markspot", "config.json");
-const DATA_HOME = join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "markspot");
-const LAUNCHER = join(DATA_HOME, "bin", "markspot-host");
+const PLATFORM = currentPlatform();
+const HOME = homedir();
+const PATHS = pathsFor(PLATFORM, process.env, HOME);
+const CONFIG_FILE = join(PATHS.configDir, "config.json");
+export const HOST_STATUS_FILE = join(PATHS.dataDir, "host-status.json");
 
-export const DEFAULT_SETTINGS: Settings = {
-  chromeProfile: join(homedir(), ".config", "google-chrome"),
-  cdpUrl: "http://127.0.0.1:9222",
-};
+export const DEFAULT_SETTINGS: Settings = { browsers: [...BROWSER_IDS] };
 
 export async function readSettings(): Promise<Settings | null> {
   try {
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(await readFile(CONFIG_FILE, "utf8")) as Partial<Settings>) };
+    const saved = JSON.parse(await readFile(CONFIG_FILE, "utf8")) as Partial<Settings>;
+    return {
+      browsers: (saved.browsers ?? DEFAULT_SETTINGS.browsers).filter(isBrowserId),
+      ...(saved.chromeProfile ? { chromeProfile: saved.chromeProfile } : {}),
+      ...(saved.cdpUrl ? { cdpUrl: saved.cdpUrl } : {}),
+    };
   } catch {
     return null;
   }
@@ -53,22 +68,31 @@ async function readOr(path: string): Promise<string | null> {
   }
 }
 
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function writePrivate(path: string, content: string, mode = 0o600): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, content, { mode });
-  await chmod(path, mode);
+  if (PLATFORM !== "win32") await chmod(path, mode);
 }
 
 /** Demande au service worker un aller-retour avec l'hôte. Rend la réponse ou la raison de l'échec. */
-export async function pingThroughChrome(ctx: Context): Promise<{ ok: boolean; detail: string }> {
+export async function pingThroughChrome(cdpUrl: string, extensionId: string): Promise<{ ok: boolean; detail: string }> {
   let cdp;
   try {
-    cdp = await connectCdp(ctx.cdpUrl);
+    cdp = await connectCdp(cdpUrl);
   } catch (error) {
     return { ok: false, detail: (error as Error).message };
   }
   try {
-    const reply = await evaluateInExtension(cdp, ctx.extensionId, "globalThis.markspot.ping()");
+    const reply = await evaluateInExtension(cdp, extensionId, "globalThis.markspot.ping()");
     if (reply === null) return { ok: false, detail: "extension service worker not running" };
     const message = reply as { type?: string };
     return { ok: message.type === "pong", detail: JSON.stringify(reply) };
@@ -79,16 +103,40 @@ export async function pingThroughChrome(ctx: Context): Promise<{ ok: boolean; de
   }
 }
 
+const run = promisify(execFile);
+
+async function reg(args: string[]): Promise<{ ok: boolean; out: string }> {
+  try {
+    const { stdout } = await run("reg", args, { windowsHide: true });
+    return { ok: true, out: stdout };
+  } catch {
+    return { ok: false, out: "" };
+  }
+}
+
 export function installSteps(ctx: Context): InstallStep[] {
-  const settings = JSON.stringify({ chromeProfile: ctx.chromeProfile, cdpUrl: ctx.cdpUrl }, null, 2) + "\n";
-  const launcher = `#!/bin/sh\nexec "${ctx.nodePath}" "${ctx.cliPath}" host "$@"\n`;
-  const hostManifestPath = join(ctx.chromeProfile, "NativeMessagingHosts", `${HOST_NAME}.json`);
+  return [...browserSteps(ctx), ...claudeSteps(ctx)];
+}
+
+function browserSteps(ctx: Context): InstallStep[] {
+  const settingsJson =
+    JSON.stringify(
+      {
+        browsers: ctx.browsers,
+        ...(ctx.chromeProfile ? { chromeProfile: ctx.chromeProfile } : {}),
+        ...(ctx.cdpUrl ? { cdpUrl: ctx.cdpUrl } : {}),
+      },
+      null,
+      2,
+    ) + "\n";
+  const launcher = launcherFor(PLATFORM, ctx.nodePath, ctx.cliPath);
+  const launcherPath = join(PATHS.dataDir, "bin", launcher.fileName);
   const hostManifest =
     JSON.stringify(
       {
         name: HOST_NAME,
         description: "Markspot native host",
-        path: LAUNCHER,
+        path: launcherPath,
         type: "stdio",
         allowed_origins: [`chrome-extension://${ctx.extensionId}/`],
       },
@@ -96,30 +144,57 @@ export function installSteps(ctx: Context): InstallStep[] {
       2,
     ) + "\n";
 
-  return [
+  const steps: InstallStep[] = [
     {
       name: `settings (${CONFIG_FILE})`,
-      satisfied: async () => (await readOr(CONFIG_FILE)) === settings,
-      apply: () => writePrivate(CONFIG_FILE, settings),
+      satisfied: async () => (await readOr(CONFIG_FILE)) === settingsJson,
+      apply: () => writePrivate(CONFIG_FILE, settingsJson),
       revert: () => rm(CONFIG_FILE, { force: true }),
     },
     {
-      name: `host launcher (${LAUNCHER})`,
-      satisfied: async () => (await readOr(LAUNCHER)) === launcher,
-      apply: () => writePrivate(LAUNCHER, launcher, 0o700),
-      revert: () => rm(LAUNCHER, { force: true }),
+      name: `host launcher (${launcherPath})`,
+      satisfied: async () => (await readOr(launcherPath)) === launcher.content,
+      apply: () => writePrivate(launcherPath, launcher.content, launcher.mode),
+      revert: () => rm(launcherPath, { force: true }),
     },
-    {
-      name: `host manifest (${hostManifestPath})`,
-      satisfied: async () => (await readOr(hostManifestPath)) === hostManifest,
-      apply: () => writePrivate(hostManifestPath, hostManifest, 0o644),
-      revert: () => rm(hostManifestPath, { force: true }),
-    },
-    {
-      name: `extension in Chrome (${ctx.cdpUrl})`,
-      satisfied: async () => (await pingThroughChrome(ctx)).ok,
+  ];
+
+  for (const target of hostTargets(ctx.browsers, PLATFORM, HOME, ctx.chromeProfile)) {
+    if (target.kind === "dir") {
+      const file = join(target.path, `${HOST_NAME}.json`);
+      steps.push({
+        name: `host manifest (${file})`,
+        // Un navigateur absent (pas de dossier de profil) est sauté au lieu d'être créé.
+        satisfied: async () => !(await exists(target.root)) || (await readOr(file)) === hostManifest,
+        apply: () => writePrivate(file, hostManifest, 0o644),
+        revert: () => rm(file, { force: true }),
+      });
+    } else {
+      const file = join(PATHS.dataDir, `${HOST_NAME}.json`);
+      steps.push({
+        name: `host manifest (${file}, registry ${target.key})`,
+        satisfied: async () =>
+          (await readOr(file)) === hostManifest && (await reg(["query", target.key, "/ve"])).out.includes(file),
+        apply: async () => {
+          await writePrivate(file, hostManifest, 0o644);
+          const added = await reg(["add", target.key, "/ve", "/t", "REG_SZ", "/d", file, "/f"]);
+          if (!added.ok) throw new Error(`reg add ${target.key} failed`);
+        },
+        revert: async () => {
+          await reg(["delete", target.key, "/f"]);
+          await rm(file, { force: true });
+        },
+      });
+    }
+  }
+
+  const cdpUrl = ctx.cdpUrl;
+  if (cdpUrl) {
+    steps.push({
+      name: `extension in Chrome (${cdpUrl})`,
+      satisfied: async () => (await pingThroughChrome(cdpUrl, ctx.extensionId)).ok,
       apply: async () => {
-        const cdp = await connectCdp(ctx.cdpUrl);
+        const cdp = await connectCdp(cdpUrl);
         try {
           const { id } = await cdp.send<{ id: string }>("Extensions.loadUnpacked", { path: ctx.extensionDir });
           if (id !== ctx.extensionId) throw new Error(`Chrome gave id ${id}, expected ${ctx.extensionId}`);
@@ -128,11 +203,77 @@ export function installSteps(ctx: Context): InstallStep[] {
         }
       },
       revert: async () => {
-        const cdp = await connectCdp(ctx.cdpUrl);
+        const cdp = await connectCdp(cdpUrl);
         try {
           await cdp.send("Extensions.uninstall", { id: ctx.extensionId });
         } finally {
           cdp.close();
+        }
+      },
+    });
+  } else {
+    steps.push({
+      name: "extension in the browser",
+      // L'hôte écrit host-status.json à chaque connexion de l'extension.
+      satisfied: () => exists(HOST_STATUS_FILE),
+      apply: async () => {},
+      revert: async () => {},
+      manual:
+        `open chrome://extensions (or brave://extensions), turn on developer mode, ` +
+        `click "Load unpacked" and choose ${ctx.extensionDir}`,
+    });
+  }
+  return steps;
+}
+
+/** Lance la CLI de Claude Code. ok=false si elle échoue ou n'est pas installée. */
+async function claude(args: string[]): Promise<{ ok: boolean; missing: boolean }> {
+  try {
+    await run("claude", args, { timeout: 60_000, windowsHide: true, shell: process.platform === "win32" });
+    return { ok: true, missing: false };
+  } catch (error) {
+    return { ok: false, missing: (error as NodeJS.ErrnoException).code === "ENOENT" };
+  }
+}
+
+const SKILL_LINK = join(homedir(), ".claude", "skills", "markspot");
+
+function claudeSteps(ctx: Context): InstallStep[] {
+  return [
+    {
+      name: "MCP server in Claude Code (claude mcp add --scope user markspot)",
+      satisfied: async () => (await claude(["mcp", "get", "markspot"])).ok,
+      apply: async () => {
+        const result = await claude(["mcp", "add", "--scope", "user", "markspot", "--", ctx.nodePath, ctx.cliPath, "mcp"]);
+        if (result.missing) throw new Error("Claude Code CLI not found in PATH; install Claude Code, then run markspot install again");
+        if (!result.ok) throw new Error("claude mcp add failed");
+      },
+      revert: async () => void (await claude(["mcp", "remove", "--scope", "user", "markspot"])),
+    },
+    {
+      name: `skill (${SKILL_LINK})`,
+      satisfied: async () => {
+        try {
+          return (await readlink(SKILL_LINK)).replace(/[\\/]+$/, "") === ctx.skillDir;
+        } catch {
+          return false;
+        }
+      },
+      apply: async () => {
+        await mkdir(dirname(SKILL_LINK), { recursive: true });
+        try {
+          if ((await lstat(SKILL_LINK)).isSymbolicLink()) await unlink(SKILL_LINK);
+          else throw new Error(`${SKILL_LINK} exists and is not a link; move it away first`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        await symlink(ctx.skillDir, SKILL_LINK, "junction");
+      },
+      revert: async () => {
+        try {
+          if ((await lstat(SKILL_LINK)).isSymbolicLink()) await unlink(SKILL_LINK);
+        } catch {
+          // déjà absent
         }
       },
     },
@@ -145,6 +286,10 @@ export async function install(ctx: Context, log: Log): Promise<void> {
   for (const step of installSteps(ctx)) {
     if (await step.satisfied()) {
       log(`ok       ${step.name}`);
+      continue;
+    }
+    if (step.manual) {
+      log(`to do    ${step.name}: ${step.manual}`);
       continue;
     }
     await step.apply();
@@ -171,7 +316,10 @@ export async function doctor(ctx: Context, log: Log): Promise<boolean> {
     healthy &&= ok;
     log(`${ok ? "ok     " : "missing"}  ${step.name}`);
   }
-  const ping = await pingThroughChrome(ctx);
+  const status = await readOr(HOST_STATUS_FILE);
+  if (status) log(`         last connection of the extension to the host: ${(JSON.parse(status) as { at: string }).at}`);
+  if (!ctx.cdpUrl) return healthy;
+  const ping = await pingThroughChrome(ctx.cdpUrl, ctx.extensionId);
   log(`${ping.ok ? "ok     " : "failed "}  extension <-> host round trip: ${ping.detail}`);
   if (!ping.ok) {
     log(`         if Extensions.loadUnpacked is refused, load ${ctx.extensionDir} by hand in chrome://extensions`);
