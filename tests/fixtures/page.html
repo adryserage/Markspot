@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page d'essai Markspot</title>
+  <style>
+    body { font: 17px/1.5 Georgia, serif; margin: 0; background: #f6f7fb; color: #222; }
+    header { padding: 24px 32px; background: #1d3557; color: #fff; }
+    main { padding: 32px; max-width: 760px; }
+    .prix { display: flex; gap: 16px; }
+    .offre { flex: 1; padding: 20px; background: #fff; border: 1px solid #ccd; border-radius: 8px; }
+    #acheter { padding: 10px 28px; font-size: 18px; background: #e63946; color: #fff; border: 0; border-radius: 4px; width: 340px; }
+  </style>
+</head>
+<body>
+  <header><h1>Abonnement</h1></header>
+  <main>
+    <p>Choisis une offre. Le bouton déborde volontairement de sa carte.</p>
+    <div class="prix">
+      <section class="offre"><h2>Base</h2><p>9 $ par mois</p><button id="acheter">Acheter</button></section>
+      <section class="offre"><h2>Pro</h2><p>29 $ par mois</p><a href="/pro?token=secret123">Voir l'offre</a></section>
+    </div>
+    <form><label>Mot de passe <input type="password" name="mdp" value="ne-pas-lire"></label></form>
+  </main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+Markspot
+Copyright 2026 Adryan Serage
+
+Ce produit est distribué sous la licence Apache 2.0 (fichier LICENSE).
+
+Il redistribue les composants suivants :
+
+- Atkinson Hyperlegible (polices dans extension/dist/fonts)
+  Copyright 2020 Braille Institute of America, Inc.
+  SIL Open Font License 1.1, texte complet dans extension/dist/fonts/OFL.txt
+
+- ulid (inclus dans extension/dist/background.js)
+  Copyright (c) 2017 Alizain Feerasta
+  Licence MIT
