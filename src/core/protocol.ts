@@ -7,6 +7,12 @@
 import type { AnnotationId, CaptureKind, NewAnnotation, Thread } from "./model.ts";
 
 /** Ce que la page voit d'une session qui écoute (même forme que dans src/store/dispatch.ts). */
+/** La session qui reçoit « Envoyer à Claude » : un projet, et son poste quand il faut les distinguer. */
+export interface SendTarget {
+  name: string;
+  host?: string;
+}
+
 export interface PublicListener {
   name: string;
   host: string;
@@ -36,7 +42,7 @@ export type ExtensionToHost =
   /** Rouvre la note si sa résolution est toujours celle de resolvedAt. */
   | { type: "reopen"; requestId: number; id: AnnotationId; resolvedAt: string }
   /** « Envoyer à Claude » : ces notes, depuis cette page, au projet `to` (ou au seul qui écoute). */
-  | { type: "send"; requestId: number; ids: AnnotationId[]; url: string; to?: string }
+  | { type: "send"; requestId: number; ids: AnnotationId[]; url: string; to?: string; host?: string }
   /** Les sessions qui écoutent cette adresse. */
   | { type: "listeners"; requestId: number; url: string };
 
@@ -49,7 +55,7 @@ export type HostReply =
   | { type: "cleared"; requestId: number; ids: AnnotationId[] }
   | { type: "resolved"; requestId: number; thread: Thread }
   | { type: "reopened"; requestId: number; thread: Thread }
-  | { type: "sent"; requestId: number; to: string; listening: number }
+  | { type: "sent"; requestId: number; to: string; host?: string; listening: number }
   /** Plusieurs projets écoutent et aucun n'est choisi ; ou la liste demandée. */
   | { type: "choose"; requestId: number; listeners: PublicListener[] }
   | { type: "listeners"; requestId: number; listeners: PublicListener[] }

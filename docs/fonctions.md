@@ -83,7 +83,7 @@ La liste « Envoyer à » montre les sessions qui écoutent, par le nom de leur 
 
 « Rafraîchir » relit la liste et dit combien de projets écoutent. « Aucune session n'écoute » veut dire qu'aucune session n'est à l'écoute : voir [Dans Claude Code](#dans-claude-code).
 
-Deux sessions dans des dossiers de même nom (par exemple une sous Linux et une sous Windows) comptent comme un seul choix : l'une ou l'autre prend l'envoi. Donne-leur des noms différents avec `markspot listen --name`.
+Quand un même projet écoute sur deux postes (le même dossier sous Linux et sous Windows), la liste montre les deux avec le nom du poste, par exemple « site (AEGISZ2) », et l'envoi ne va qu'au poste choisi.
 
 ### Exporter les notes
 
@@ -112,7 +112,7 @@ Une note qu'il ne peut pas régler reste ouverte, avec la raison.
 Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.md#envoyer-les-notes-à-claude) :
 
 - le mode écoute : dis « écoute mes annotations ». Claude lance `markspot listen` en tâche de fond, qui n'use aucun jeton pendant l'attente ;
-- le réveil automatique : lance Claude Code avec `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche).
+- le réveil automatique : lance Claude Code avec `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
 
 ### Les outils MCP
 

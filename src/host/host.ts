@@ -146,8 +146,16 @@ async function handle(
         send({ type: "rejected", requestId: message.requestId, reason: "no open note" });
         return;
       }
-      const outcome = await store.send(open, message.url, message.to);
-      if (outcome.kind === "sent") send({ type: "sent", requestId: message.requestId, to: outcome.to, listening: outcome.listening });
+      const outcome = await store.send(open, message.url, message.to, message.host);
+      if (outcome.kind === "sent") {
+        send({
+          type: "sent",
+          requestId: message.requestId,
+          to: outcome.to,
+          ...(outcome.host ? { host: outcome.host } : {}),
+          listening: outcome.listening,
+        });
+      }
       else if (outcome.kind === "choose") send({ type: "choose", requestId: message.requestId, listeners: outcome.listeners });
       else send({ type: "rejected", requestId: message.requestId, reason: "nobody listens" });
       return;
