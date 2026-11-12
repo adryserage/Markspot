@@ -267,6 +267,9 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
       return { ok: true, type: "state", note: hostView(answer.thread) };
     }
+    case "openExport":
+      await openExportPage(sender.tab);
+      return { ok: true, type: "done" };
     case "discard":
       await discardDraft(request.draftId);
       return { ok: true, type: "done" };
@@ -297,8 +300,15 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({ id: EXPORT_MENU, title: "Exporter les notes", contexts: ["action"] });
 });
 
-chrome.contextMenus.onClicked.addListener(async (info) => {
-  if (info.menuItemId === EXPORT_MENU) await chrome.tabs.create({ url: chrome.runtime.getURL("dist/export.html") });
+async function openExportPage(nextTo?: chrome.tabs.Tab): Promise<void> {
+  await chrome.tabs.create({
+    url: chrome.runtime.getURL("dist/export.html"),
+    ...(nextTo?.index !== undefined ? { index: nextTo.index + 1 } : {}),
+  });
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === EXPORT_MENU) await openExportPage(tab);
 });
 
 // ---------------------------------------------------- doctor and tests
