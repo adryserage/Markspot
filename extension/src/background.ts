@@ -86,7 +86,8 @@ function afterFlush<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Envoie la file à l'hôte, dans l'ordre. create est idempotent : une coupure ne double rien. */
 function flushOutbox(): Promise<void> {
-  flushing = flushing.then(async () => {
+  // Par afterFlush : une erreur pendant l'envoi ne bloque pas les opérations suivantes.
+  return afterFlush(async () => {
     if (!host.connected) return;
     for (const note of await allAnnotations()) {
       const pngs = await outboxPngs(note.id);
@@ -114,7 +115,6 @@ function flushOutbox(): Promise<void> {
       broadcast({ type: "note", note: hostView(thread) }, thread.annotation.page.url);
     }
   });
-  return flushing;
 }
 
 host.onConnected(async () => {
