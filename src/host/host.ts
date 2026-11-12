@@ -1,14 +1,19 @@
-// Hôte natif : Chrome le lance quand l'extension appelle connectNative, et le tue
-// quand le port se ferme. Il est donc unique tant que Chrome n'en ouvre qu'un.
+// Hôte natif : Chrome ou Brave le lance quand l'extension appelle connectNative, et le
+// tue quand le port se ferme. Il écrit les notes que la page envoie et pousse à
+// l'extension les changements faits par les serveurs MCP (note réglée, retirée).
 
 import type { Readable, Writable } from "node:stream";
+import { fromBase64 } from "../core/base64.ts";
+import type { NewAnnotation } from "../core/model.ts";
 import {
+  MAX_CAPTURE_TO_EXTENSION,
   MAX_FRAME_TO_EXTENSION,
   MAX_FRAME_TO_HOST,
-  parseExtensionMessage,
   type ExtensionToHost,
   type HostToExtension,
 } from "../core/protocol.ts";
+import { ExtensionToHostSchema } from "../core/schema.ts";
+import type { HostStore } from "../store/store.ts";
 
 export function encodeFrame(message: HostToExtension): Buffer {
   const body = Buffer.from(JSON.stringify(message), "utf8");
@@ -20,58 +25,154 @@ export function encodeFrame(message: HostToExtension): Buffer {
   return Buffer.concat([header, body]);
 }
 
-/** Recolle les trames coupées entre plusieurs morceaux de stdin. */
+export type Decoded = { ok: true; value: unknown } | { ok: false; error: string };
+
+/** Recolle les trames coupées entre plusieurs morceaux de stdin. Ne lève jamais. */
 export class FrameDecoder {
   #buffer = Buffer.alloc(0);
+  #broken = false;
 
-  push(chunk: Buffer): unknown[] {
+  get broken(): boolean {
+    return this.#broken;
+  }
+
+  push(chunk: Buffer): Decoded[] {
+    if (this.#broken) return [];
     this.#buffer = Buffer.concat([this.#buffer, chunk]);
-    const messages: unknown[] = [];
+    const out: Decoded[] = [];
     while (this.#buffer.length >= 4) {
       const length = this.#buffer.readUInt32LE(0);
-      if (length > MAX_FRAME_TO_HOST) throw new Error(`frame of ${length} bytes exceeds the 64 MB limit`);
+      if (length > MAX_FRAME_TO_HOST) {
+        // Flux désynchronisé : impossible de retrouver le début de la trame suivante.
+        this.#broken = true;
+        out.push({ ok: false, error: `frame of ${length} bytes exceeds the 64 MB limit` });
+        return out;
+      }
       if (this.#buffer.length < 4 + length) break;
-      messages.push(JSON.parse(this.#buffer.subarray(4, 4 + length).toString("utf8")));
+      const body = this.#buffer.subarray(4, 4 + length).toString("utf8");
       this.#buffer = this.#buffer.subarray(4 + length);
+      try {
+        out.push({ ok: true, value: JSON.parse(body) });
+      } catch {
+        out.push({ ok: false, error: "invalid JSON frame" });
+      }
     }
-    return messages;
+    return out;
   }
 }
 
 export interface HostOptions {
-  /** chrome-extension://<id>/ attendu ; Chrome passe l'origine réelle en premier argument. */
+  /** chrome-extension://<id>/ attendu ; le navigateur passe l'origine réelle en premier argument. */
   expectedOrigin: string;
   origin: string | undefined;
   version: string;
   input: Readable;
   output: Writable;
+  /** Ouvert seulement après le contrôle d'origine. */
+  openStore: () => Promise<HostStore>;
 }
 
-export function handle(message: ExtensionToHost, version: string): HostToExtension {
+function requestIdOf(raw: unknown): number | null {
+  const id = (raw as { requestId?: unknown } | null)?.requestId;
+  return typeof id === "number" ? id : null;
+}
+
+async function handle(
+  message: ExtensionToHost,
+  store: HostStore,
+  version: string,
+  send: (m: HostToExtension) => void,
+): Promise<void> {
   switch (message.type) {
     case "ping":
-      return { type: "pong", version, node: process.version };
+      send({ type: "pong", requestId: message.requestId, version, node: process.version });
+      return;
+    case "sync":
+      for (const thread of await store.list()) send({ type: "thread", thread });
+      send({ type: "synced", requestId: message.requestId });
+      return;
+    case "create": {
+      const thread = await store.create(message.annotation as NewAnnotation, {
+        zone: fromBase64(message.pngs.zone),
+        context: fromBase64(message.pngs.context),
+      });
+      send({ type: "created", requestId: message.requestId, thread });
+      return;
+    }
+    case "edit": {
+      const outcome = await store.editComment(message.id, message.comment);
+      if (outcome.kind === "edited") send({ type: "edited", requestId: message.requestId, thread: outcome.thread });
+      else
+        send({
+          type: "rejected",
+          requestId: message.requestId,
+          reason: outcome.kind === "already_resolved" ? "note already resolved" : "note not found",
+        });
+      return;
+    }
+    case "clear":
+      send({ type: "cleared", requestId: message.requestId, ids: await store.clearResolved(message.ids) });
+      return;
+    case "capture": {
+      const png = await store.capture(message.id, "zone");
+      const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;
+      send({ type: "capture", requestId: message.requestId, png: fits ? Buffer.from(png).toString("base64") : null });
+      return;
+    }
   }
 }
 
-/** Se termine quand Chrome ferme stdin. Rend le code de sortie. */
-export function runHost(options: HostOptions): Promise<number> {
+/** Se termine quand le navigateur ferme stdin. Rend le code de sortie. */
+export async function runHost(options: HostOptions): Promise<number> {
   const { input, output } = options;
-  const send = (message: HostToExtension) => output.write(encodeFrame(message));
+  const send = (message: HostToExtension) => {
+    try {
+      output.write(encodeFrame(message));
+    } catch (error) {
+      output.write(encodeFrame({ type: "rejected", requestId: null, reason: (error as Error).message }));
+    }
+  };
 
   if (options.origin !== options.expectedOrigin) {
-    send({ type: "rejected", reason: `unexpected caller ${options.origin ?? "(none)"}` });
-    return Promise.resolve(1);
+    send({ type: "rejected", requestId: null, reason: `unexpected caller ${options.origin ?? "(none)"}` });
+    return 1;
   }
 
+  const store = await options.openStore();
+  const watcher = store.watch((change) =>
+    send(change.kind === "upserted" ? { type: "thread", thread: change.thread } : { type: "removed", id: change.id }),
+  );
   const decoder = new FrameDecoder();
+  let queue = Promise.resolve();
+
   return new Promise((resolve) => {
     input.on("data", (chunk: Buffer) => {
-      for (const raw of decoder.push(chunk)) {
-        const message = parseExtensionMessage(raw);
-        send(message ? handle(message, options.version) : { type: "rejected", reason: "unknown message" });
+      for (const frame of decoder.push(chunk)) {
+        // Une requête à la fois, dans l'ordre d'arrivée.
+        queue = queue.then(async () => {
+          if (!frame.ok) {
+            send({ type: "rejected", requestId: null, reason: frame.error });
+            return;
+          }
+          const parsed = ExtensionToHostSchema.safeParse(frame.value);
+          if (!parsed.success) {
+            send({ type: "rejected", requestId: requestIdOf(frame.value), reason: "invalid message" });
+            return;
+          }
+          try {
+            await handle(parsed.data as ExtensionToHost, store, options.version, send);
+          } catch (error) {
+            send({ type: "rejected", requestId: parsed.data.requestId, reason: (error as Error).message });
+          }
+        });
       }
+      if (decoder.broken) input.destroy();
     });
-    input.on("end", () => resolve(0));
+    const finish = () => {
+      watcher.close();
+      void queue.then(() => resolve(decoder.broken ? 1 : 0));
+    };
+    input.on("end", finish);
+    input.on("close", finish);
   });
 }

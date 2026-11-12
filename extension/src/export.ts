@@ -3,6 +3,7 @@
 
 import { exportFileName } from "../../src/core/export.ts";
 import { exportAll } from "./local-store.ts";
+import { ask } from "./messages.ts";
 
 const status = document.getElementById("status");
 const link = document.getElementById("download") as HTMLAnchorElement | null;
@@ -13,7 +14,11 @@ async function main(): Promise<void> {
   const file = await exportAll(now);
   const count = file.annotations.length;
   if (count === 0) {
-    status.textContent = "Aucune note à exporter. Appuie sur Alt+C sur une page pour en créer une.";
+    const state = await ask({ type: "status" });
+    status.textContent =
+      state.ok && state.type === "status" && state.connected
+        ? "Aucune note en attente : tes notes sont déjà dans le dossier Markspot, où Claude Code les lit directement."
+        : "Aucune note à exporter. Appuie sur Alt+C sur une page pour en créer une.";
     return;
   }
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
