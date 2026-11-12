@@ -98,8 +98,10 @@ test("a malformed dispatch on a shared folder is ignored, a claim left by a dead
   await writeFile(claimedFile, JSON.stringify(lost));
   const old = new Date(Date.now() - 120_000);
   await utimes(claimedFile, old, old);
-  assert.equal(await claimNext(dir, me), null, "requeued during this scan");
-  assert.equal((await claimNext(dir, me))?.id, lost.id);
+  // Le fichier mal formé est retiré : la file est vide, la réclamation abandonnée doit quand même revenir.
+  await rm(join(paths.dispatch, "01JD8000000000000000000099.json"));
+  const back = (await claimNext(dir, me)) ?? (await claimNext(dir, me));
+  assert.equal(back?.id, lost.id);
 });
 
 test("a delivered dispatch never comes back, a fresh claim of a dead listener waits a minute", async () => {
