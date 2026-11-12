@@ -117,6 +117,32 @@ test("watch reports a resolution written by another process", async () => {
   assert.deepEqual(changes, ["up:Corrigé"]);
 });
 
+test("editComment bumps the revision, and a resolved note no longer changes", async () => {
+  const cfg = await config();
+  const host = await openHostStore(cfg);
+  const note = newAnnotation();
+  await host.create(note, pngs);
+  const edited = await host.editComment(note.id, "Le bouton déborde sur mobile");
+  assert.equal(edited.kind, "edited");
+  assert.equal(edited.kind === "edited" && edited.thread.annotation.revision, 1);
+  assert.equal((await host.get(note.id))?.annotation.comment, "Le bouton déborde sur mobile");
+  await (await openAgentStore(cfg)).resolve(note.id, "Fait", agent);
+  assert.equal((await host.editComment(note.id, "Autre chose")).kind, "already_resolved");
+  assert.equal((await host.editComment("01JD8ZZZZZZZZZZZZZZZZZZZZZ" as AnnotationId, "x")).kind, "not_found");
+});
+
+test("clearResolved removes only the resolved notes it is given", async () => {
+  const cfg = await config();
+  const host = await openHostStore(cfg);
+  const open = newAnnotation();
+  const done = newAnnotation();
+  await host.create(open, pngs);
+  await host.create(done, pngs);
+  await (await openAgentStore(cfg)).resolve(done.id, "Fait", agent);
+  assert.deepEqual(await host.clearResolved([open.id, done.id]), [done.id]);
+  assert.deepEqual((await host.list()).map((t) => t.annotation.id), [open.id]);
+});
+
 test("an id with a path inside is refused", () => {
   const bad = { ...newAnnotation(), id: "../../etc/passwd" };
   assert.equal(NewAnnotationSchema.safeParse(bad).success, false);

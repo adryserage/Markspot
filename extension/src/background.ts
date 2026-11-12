@@ -15,13 +15,15 @@ import {
   type IsoTime,
   type Thread,
 } from "../../src/core/model.ts";
-import { captureTab } from "./capture.ts";
+import { sanitizeStrokes } from "../../src/core/drawing.ts";
+import { burnStrokes, captureTab } from "./capture.ts";
 import { createHostLink } from "./link.ts";
 import {
   allAnnotations,
   capturePng,
   createFromDraft,
   discardDraft,
+  editQueued,
   exportAll,
   outboxPngs,
   purgeOldDrafts,
@@ -132,6 +134,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "captured", draftId, png: capture.png.zone };
     }
     case "save": {
+      const strokes = sanitizeStrokes(request.strokes);
       const annotation = await createFromDraft(request.draftId, (capture) => ({
         id: request.draftId as AnnotationId,
         scope: LOCAL_SCOPE,
@@ -139,15 +142,46 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         author: LOCAL_USER,
         source: { kind: "extension", trust: "owner" },
         page: { url: redactUrl(request.url), title: request.title.slice(0, 300) },
-        mark: request.mark,
+        mark: strokes.length > 0 ? { ...request.mark, drawing: strokes } : request.mark,
         viewport: request.viewport,
         comment: request.comment.slice(0, 4000),
         captures: capture.meta,
-      }));
+      }), strokes.length > 0 ? (png) => burnStrokes(png, strokes) : undefined);
       await flushOutbox();
       const written = threads.get(annotation.id);
       const note: NoteView = written ? hostView(written) : { annotation, resolution: null, pending: true };
       return { ok: true, type: "saved", note };
+    }
+    case "edit": {
+      const queued = await editQueued(request.id, request.comment.slice(0, 4000));
+      if (queued) {
+        const note: NoteView = { annotation: queued, resolution: null, pending: true };
+        broadcast({ type: "note", note }, queued.page.url);
+        return { ok: true, type: "edited", note };
+      }
+      const reply = await host.request({ type: "edit", id: request.id, comment: request.comment.slice(0, 4000) });
+      if (reply.type !== "edited") {
+        return { ok: false, error: reply.type === "rejected" && reply.reason === "note already resolved" ? "note déjà réglée" : "refusé par le programme local" };
+      }
+      threads.set(reply.thread.annotation.id, reply.thread);
+      broadcast({ type: "note", note: hostView(reply.thread) }, reply.thread.annotation.page.url);
+      return { ok: true, type: "edited", note: hostView(reply.thread) };
+    }
+    case "clear": {
+      const page = sender.url ? pageKeyOf(sender.url) : null;
+      const ids = request.ids.filter((id) => {
+        const thread = threads.get(id);
+        return thread?.resolution && pageKeyOf(thread.annotation.page.url) === page;
+      });
+      if (ids.length === 0) return { ok: true, type: "cleared", ids: [] };
+      const reply = await host.request({ type: "clear", ids });
+      if (reply.type !== "cleared") return { ok: false, error: "refusé par le programme local" };
+      for (const id of reply.ids) {
+        const known = threads.get(id);
+        threads.delete(id);
+        if (known) broadcast({ type: "removed", id }, known.annotation.page.url);
+      }
+      return { ok: true, type: "cleared", ids: reply.ids };
     }
     case "discard":
       await discardDraft(request.draftId);

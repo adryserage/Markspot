@@ -33,6 +33,8 @@ function fakeStore(): HostStore & { emit(change: ThreadChange): void } {
     capture: async () => new Uint8Array([7, 8]),
     capturePath: () => "/tmp/x.png",
     create: async () => thread,
+    editComment: async () => ({ kind: "edited", thread }),
+    clearResolved: async (ids) => ids,
     watch(onChange) {
       listener = onChange;
       return { close() {} };

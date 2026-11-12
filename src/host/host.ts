@@ -99,6 +99,20 @@ async function handle(
       send({ type: "created", requestId: message.requestId, thread });
       return;
     }
+    case "edit": {
+      const outcome = await store.editComment(message.id, message.comment);
+      if (outcome.kind === "edited") send({ type: "edited", requestId: message.requestId, thread: outcome.thread });
+      else
+        send({
+          type: "rejected",
+          requestId: message.requestId,
+          reason: outcome.kind === "already_resolved" ? "note already resolved" : "note not found",
+        });
+      return;
+    }
+    case "clear":
+      send({ type: "cleared", requestId: message.requestId, ids: await store.clearResolved(message.ids) });
+      return;
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;
