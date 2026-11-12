@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Markspot",
+  "version": "0.1.0",
+  "description": "Marque un endroit d’une page et laisse une note pour Claude Code.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApDyVvDBmDHqd0gTGvVV6HQx2wm89bu/QbTNdxqP+xCJe/zvD2rltFdOvOWBxuJdXw6Qmi43ZY1+ZJ1dXfHjYsbpw+ZeUSFGiHtx8mzoJl6KeuxqjlVLHSdFzBuILxUP52YSO4UARvPWdwUIqlneW2AqG8OUsjRUSyklPZlPOvPNRBKwfKtpTJ6NLS2SQTtYiYg5+9Mb8C7Qwcf1sndLUeNiCJHdQ/QWHPgj97TH2bT0sKG+Rm8uTpcgsDJbmOpUWDz4pL+olM9gjl3w/R7GdlUI8UvjW7RiGadTrJ9FDAspX/VHzw2O1H9K5Bc37tTgvuIYhz+DanBWFVXAvzDBcawIDAQAB",
+  "minimum_chrome_version": "130",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "contextMenus",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Markspot : annoter cette page (Alt+C)"
+  },
+  "commands": {
+    "toggle-annotate": {
+      "suggested_key": {
+        "default": "Alt+C"
+      },
+      "description": "Activer ou couper le mode annotation"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "dist/fonts/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

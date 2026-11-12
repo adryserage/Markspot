@@ -1,0 +1,46 @@
+:root {
+  --ink: #151821;
+  --paper: #ffffff;
+  --marker: #f2ff3a;
+  --muted: #4a5060;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 17px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+main {
+  max-width: 34rem;
+  margin: 12vh auto 0;
+  padding: 0 20px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+
+#download {
+  display: inline-block;
+  padding: 9px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--marker);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+#download:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 15px;
+}
