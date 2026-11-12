@@ -111,7 +111,11 @@ async function handle(
       return;
     }
     case "clear":
-      send({ type: "cleared", requestId: message.requestId, ids: await store.clearResolved(message.ids) });
+      send({
+        type: "cleared",
+        requestId: message.requestId,
+        ids: await store.clearNotes(message.ids, { includeOpen: message.includeOpen ?? false }),
+      });
       return;
     case "capture": {
       const png = await store.capture(message.id, "zone");

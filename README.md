@@ -27,11 +27,13 @@ Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » 
 
 1. Dans Chrome, tu appuies sur Alt+C, tu cliques sur un élément ou tu traces une zone, puis tu écris ton commentaire.
 2. Markspot garde l'adresse, l'élément (sélecteur, texte, styles calculés), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée.
-3. Tu peux dessiner sur la capture (flèche, rectangle, stylo) pour montrer précisément ce qui cloche.
+3. La boîte de commentaire s'ouvre sur la capture : tu peux dessiner dessus (flèche, rectangle, stylo) pour montrer précisément ce qui cloche.
 4. Dans Claude Code, tu demandes « règle mes annotations ». Claude lit chaque note avec ses images, trouve le fichier source, corrige et vérifie.
 5. Sur la page, la pastille passe à « réglée » et affiche la réponse de Claude.
 
-Pendant le mode annotation, le menu en haut à droite liste les notes de la page : un clic va à la note, « Modifier » change un commentaire, et « Effacer les notes réglées » retire celles que Claude a déjà réglées.
+Pendant le mode annotation, le menu en haut à droite liste les notes de la page : un clic va à la note, « Modifier » change un commentaire, « Effacer les notes réglées » retire celles que Claude a déjà réglées, et « Tout effacer sur cette page » retire toutes les notes de la page après confirmation.
+
+Une note « En attente » n'a pas encore été reçue par le programme local : c'est le cas de toutes les notes tant que Markspot n'est pas installé sur le poste (version d'essai). Elles partent toutes seules à la première connexion.
 
 Trois pièces font le travail :
 

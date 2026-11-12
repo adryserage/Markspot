@@ -77,8 +77,11 @@ export interface HostStore extends ThreadReader {
   create(annotation: NewAnnotation, pngs: Record<CaptureKind, Uint8Array>): Promise<Thread>;
   /** Remplace le commentaire d'une note ouverte. Une note réglée ne change plus. */
   editComment(id: AnnotationId, comment: string): Promise<EditOutcome>;
-  /** Retire celles de ces notes qui sont réglées (bouton de la page). Rend les identifiants retirés. */
-  clearResolved(ids: AnnotationId[]): Promise<AnnotationId[]>;
+  /**
+   * Retire ces notes (boutons du menu de la page) : les réglées seulement, ou toutes avec
+   * includeOpen. Rend les identifiants retirés.
+   */
+  clearNotes(ids: AnnotationId[], options: { includeOpen: boolean }): Promise<AnnotationId[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
 }
@@ -252,12 +255,13 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       return thread;
     },
 
-    async clearResolved(ids) {
+    async clearNotes(ids, { includeOpen }) {
       const removed: AnnotationId[] = [];
       for (const id of ids) {
         const thread = await read.get(id);
-        // Une note réglée ne change plus : aucune course avec resolve ou editComment.
-        if (thread?.resolution && (await removeNote(paths, id))) removed.push(id);
+        if (!thread || (!includeOpen && !thread.resolution)) continue;
+        // Rename atomique : un resolve ou un editComment en même temps échoue en « not found ».
+        if (await removeNote(paths, id)) removed.push(id);
       }
       return removed;
     },
