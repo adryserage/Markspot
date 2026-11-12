@@ -71,6 +71,8 @@ export class NotesMenu {
   readonly #no = el("button", "primary", "Non, garder");
   readonly #yes = el("button", "ghost danger", "Oui, effacer");
   readonly #message = el("p", "hint");
+  /** Le programme local manque : comment l'installer. */
+  readonly #install = el("div", "menu-install");
   #notes: NoteView[] = [];
   #open = false;
   #editing = false;
@@ -101,7 +103,8 @@ export class NotesMenu {
     this.#confirm.append(this.#confirmText, answers);
     this.#confirm.hidden = true;
     this.#panel.hidden = true;
-    this.#panel.append(this.#list, this.#message, this.#targetRow, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
+    this.#install.hidden = true;
+    this.#panel.append(this.#install, this.#list, this.#message, this.#targetRow, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
 
     this.#target.append(el("span", "", "Envoyer à"), this.#targetSelect);
     this.#refresh.type = "button";
@@ -188,6 +191,30 @@ export class NotesMenu {
   }
 
   /** Version d'essai (pas de programme local) : pas de bouton « Envoyer à Claude ». */
+  /** Sans programme local, les notes restent dans le navigateur : on dit comment l'installer. */
+  setHostMissing(missing: boolean): void {
+    this.#install.hidden = !missing;
+    if (!missing || this.#install.childElementCount > 0) return;
+    const command = "npm install -g markspot && markspot install";
+    const code = el("code", "", command);
+    const copy = el("button", "ghost small", "Copier");
+    copy.type = "button";
+    copy.addEventListener("click", (e) => {
+      if (!e.isTrusted) return;
+      void navigator.clipboard.writeText(command).then(
+        () => (copy.textContent = "Copié"),
+        () => (copy.textContent = "Sélectionne la commande"),
+      );
+    });
+    this.#install.append(
+      el("strong", "", "Installer Markspot sur ce poste"),
+      el("p", "", "Le programme local n'est pas installé : tes notes restent dans ce navigateur. Dans un terminal :"),
+      code,
+      copy,
+      el("p", "", "Puis recharge la page. Claude Code pourra lire tes notes."),
+    );
+  }
+
   setCanSend(canSend: boolean): void {
     this.#canSend = canSend;
     this.update(this.#notes);

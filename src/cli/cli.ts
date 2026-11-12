@@ -25,6 +25,9 @@ const USAGE = `markspot ${VERSION}
 
   markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>] [--data-dir <dir>]
   markspot install --key-file <file>   use the dispatch key of your other machine
+  markspot install --no-shell  do not add the claude function to the shell startup files (--shell: add it again)
+  markspot launch [args…]      what that claude function runs: asks whether the session listens
+                               to Markspot, then starts claude with the same args
   markspot key                 print this machine's dispatch key (keep it secret)
   markspot doctor
   markspot uninstall
@@ -42,6 +45,8 @@ interface Flags {
   browser?: string | undefined;
   "data-dir"?: string | undefined;
   "key-file"?: string | undefined;
+  "no-shell"?: boolean | undefined;
+  shell?: boolean | undefined;
 }
 
 async function context(flags: Flags): Promise<Context> {
@@ -68,8 +73,11 @@ async function context(flags: Flags): Promise<Context> {
     if (!key) throw new Error(`${flags["key-file"]} does not hold a Markspot dispatch key (markspot key prints it on the other machine)`);
     importKey = key.toString("base64");
   }
+  // --shell annule un --no-shell gardé dans config.json.
+  const shell = flags["no-shell"] ? false : flags.shell ? undefined : saved.shell;
   return {
     ...(importKey ? { importKey } : {}),
+    ...(shell === false ? { shell: false as const } : {}),
     browsers: browsers.filter(isBrowserId),
     ...(chromeProfile ? { chromeProfile: resolve(chromeProfile) } : {}),
     ...(cdpUrl ? { cdpUrl } : {}),
@@ -178,6 +186,11 @@ async function main(argv: string[]): Promise<number> {
       const name = values.name ?? basename(process.cwd());
       return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout, name });
     }
+    case "launch": {
+      // Lancé par la fonction `claude` qu'install ajoute au shell : rest passe tel quel à claude.
+      const { launch } = await import("./launch.ts");
+      return launch(rest);
+    }
     case "key": {
       // La clé d'envoi de ce poste, à recopier une fois sur l'autre (install --key-file).
       const [{ readDispatchKey }, { KEY_FILE }] = await Promise.all([import("../store/dispatch.ts"), import("./install.ts")]);
@@ -200,6 +213,8 @@ async function main(argv: string[]): Promise<number> {
           browser: { type: "string" },
           "data-dir": { type: "string" },
           "key-file": { type: "string" },
+          "no-shell": { type: "boolean" },
+          shell: { type: "boolean" },
         },
       });
       const ctx = await context(values);
