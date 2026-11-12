@@ -1,28 +1,56 @@
 // Point d'entrée du binaire `markspot`.
 
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
 import { runHost } from "../host/host.ts";
 import { loadConfig, openAgentStore, openHostStore } from "../store/store.ts";
-import { DEFAULT_SETTINGS, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
+import { BROWSER_IDS, isBrowserId } from "./browsers.ts";
+import { DEFAULT_SETTINGS, HOST_STATUS_FILE, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
+
+/** Trace de la dernière connexion de l'extension, lue par doctor quand il n'a pas de port de débogage. */
+async function writeHostStatus(): Promise<void> {
+  try {
+    await mkdir(dirname(HOST_STATUS_FILE), { recursive: true });
+    await writeFile(HOST_STATUS_FILE, JSON.stringify({ at: new Date().toISOString(), version: VERSION }) + "\n");
+  } catch {
+    // simple trace : son absence ne doit pas empêcher l'hôte de démarrer
+  }
+}
 
 const USAGE = `markspot ${VERSION}
 
-  markspot install [--chrome-profile <dir>] [--cdp <url>]
+  markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>]
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
   markspot host <origin>       started by the browser, not by hand
 `;
 
-async function context(flags: { "chrome-profile"?: string | undefined; cdp?: string | undefined }): Promise<Context> {
+interface Flags {
+  "chrome-profile"?: string | undefined;
+  cdp?: string | undefined;
+  browser?: string | undefined;
+}
+
+async function context(flags: Flags): Promise<Context> {
   const saved = (await readSettings()) ?? DEFAULT_SETTINGS;
   const cliPath = fileURLToPath(import.meta.url);
+  const browsers = flags.browser
+    ? flags.browser === "all"
+      ? [...BROWSER_IDS]
+      : flags.browser.split(",").map((b) => b.trim())
+    : saved.browsers;
+  const unknown = browsers.filter((b) => !isBrowserId(b));
+  if (unknown.length > 0) throw new Error(`unknown browser ${unknown.join(", ")}; known: ${BROWSER_IDS.join(", ")}, all`);
+  const chromeProfile = flags["chrome-profile"] ?? saved.chromeProfile;
+  const cdpUrl = flags.cdp ?? saved.cdpUrl;
   return {
-    chromeProfile: resolve(flags["chrome-profile"] ?? saved.chromeProfile),
-    cdpUrl: flags.cdp ?? saved.cdpUrl,
+    browsers: browsers.filter(isBrowserId),
+    ...(chromeProfile ? { chromeProfile: resolve(chromeProfile) } : {}),
+    ...(cdpUrl ? { cdpUrl } : {}),
     extensionId: EXTENSION_ID,
     extensionDir: join(dirname(cliPath), "..", "extension"),
     cliPath,
@@ -37,6 +65,7 @@ async function main(argv: string[]): Promise<number> {
 
   switch (command) {
     case "host":
+      if (rest[0] === EXTENSION_ORIGIN) await writeHostStatus();
       return runHost({
         expectedOrigin: EXTENSION_ORIGIN,
         origin: rest[0],
@@ -61,7 +90,7 @@ async function main(argv: string[]): Promise<number> {
     case "doctor": {
       const { values } = parseArgs({
         args: rest,
-        options: { "chrome-profile": { type: "string" }, cdp: { type: "string" } },
+        options: { "chrome-profile": { type: "string" }, cdp: { type: "string" }, browser: { type: "string" } },
       });
       const ctx = await context(values);
       if (command === "install") await install(ctx, log);
