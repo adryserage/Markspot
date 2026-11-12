@@ -561,3 +561,70 @@ button.danger:hover {
 .card-head.panel-bar strong {
   margin-right: auto;
 }
+
+/* Boutons express, à gauche de « N notes ». Masqués sur écran étroit : les actions restent dans le menu. */
+.menu-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick {
+  display: flex;
+  gap: 6px;
+}
+
+.quick-button {
+  padding: 7px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 13px/1.2 var(--font);
+  box-shadow: 0 3px 10px rgb(21 24 33 / 0.22);
+  cursor: pointer;
+}
+
+.quick-button:hover:not(:disabled) {
+  background: #f3f4f7;
+}
+
+.quick-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.quick-button.danger {
+  border-color: #b3261e;
+  color: #b3261e;
+}
+
+.quick-button:focus-visible {
+  outline: 3px solid var(--marker);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--ink);
+}
+
+.quick-undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 14px/1.3 var(--font);
+  box-shadow: 0 6px 20px rgb(21 24 33 / 0.3);
+}
+
+.quick-undo button {
+  border-color: rgb(255 255 255 / 0.5);
+  background: transparent;
+  color: var(--paper);
+}
+
+@media (max-width: 1000px) {
+  .quick {
+    display: none;
+  }
+}

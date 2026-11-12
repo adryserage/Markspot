@@ -30,6 +30,8 @@ export type OverlayRequest =
   /** La personne règle la note à la main, ou la rouvre. */
   | { type: "resolve"; id: AnnotationId; reply: string }
   | { type: "reopen"; id: AnnotationId }
+  /** Ouvre la page d'export dans un nouvel onglet. */
+  | { type: "openExport" }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
