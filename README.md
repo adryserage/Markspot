@@ -6,7 +6,9 @@ Tout reste sur ton poste : aucune donnée envoyée ailleurs, aucune télémétri
 
 ## État
 
-Version 0.1, en construction. La boucle complète marche : tu annotes dans Chrome ou Brave, Claude Code lit la note avec ses deux images, corrige, puis la résout, et la pastille passe à « réglée » avec sa réponse. L'installation sous Windows et macOS n'a pas encore été essayée sur une vraie machine.
+Version 0.1, en construction. La boucle complète marche : tu annotes dans Chrome ou Brave, Claude Code lit la note avec ses deux images, corrige, puis la résout, et la pastille passe à « Réglée » avec sa réponse. Essayé sous Linux (Chrome) et sous Windows (Brave) ; l'installation sous macOS n'a pas encore été essayée sur une vraie machine.
+
+Chaque fonction est décrite dans [docs/fonctions.md](docs/fonctions.md).
 
 ## Essayer l'annotation seule
 
@@ -19,7 +21,7 @@ node build.mjs --trial ./markspot-essai
 
 Dans Chrome, ouvre `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `markspot-essai`. Sur une page, appuie sur Alt+C ou clique sur l'icône Markspot. Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
 
-Pour donner tes notes à Claude Code avant l'arrivée du serveur MCP : clic droit sur l'icône Markspot, « Exporter les notes ». Tu obtiens un fichier JSON avec chaque note et ses deux images, à enregistrer là où Claude Code peut le lire.
+Pour donner tes notes à Claude Code sans le programme local : clic droit sur l'icône Markspot, « Exporter les notes ». Tu obtiens un fichier JSON avec chaque note et ses deux images, à enregistrer là où Claude Code peut le lire.
 
 Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » dans `chrome://extensions`. Ne supprime pas l'extension : ses notes partiraient avec elle.
 
@@ -31,7 +33,7 @@ Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » 
 4. Dans Claude Code, tu demandes « règle mes annotations ». Claude lit chaque note avec ses images, trouve le fichier source, corrige et vérifie.
 5. Sur la page, la pastille passe à « réglée » et affiche la réponse de Claude.
 
-Pendant le mode annotation, le menu en haut à droite liste les notes de la page : un clic va à la note, « Modifier » change un commentaire, « Effacer les notes réglées » retire celles que Claude a déjà réglées, et « Tout effacer sur cette page » retire toutes les notes de la page après confirmation. « Marquer réglée » et « Rouvrir » changent l'état d'une note à la main ; l'export dit quelles notes sont réglées. À côté du menu, des boutons express font la même chose en un clic : « Tout régler » (avec « Annuler » pendant quelques secondes), « Exporter », « Effacer réglées » et « Tout effacer » (avec confirmation).
+Pendant le mode annotation, le menu en haut à droite liste les notes de la page, et des boutons express à côté règlent, exportent, envoient à Claude ou effacent en un clic. Le détail est dans [docs/fonctions.md](docs/fonctions.md#le-menu-des-notes).
 
 Une note « En attente » n'a pas encore été reçue par le programme local : c'est le cas de toutes les notes tant que Markspot n'est pas installé sur le poste (version d'essai). Elles partent toutes seules à la première connexion.
 
