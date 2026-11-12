@@ -25,7 +25,7 @@ Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hô
 - `src/mcp/` : serveur MCP (`server.ts`) et rendu des notes pour Claude (`render.ts`).
 - `skill/SKILL.md` : skill « règle mes annotations ».
 - `src/cli/` : binaire `markspot` ; `install.ts` contient les étapes `{ satisfied, apply, revert }` d'install, d'uninstall et de doctor ; `browsers.ts` dit où chaque navigateur cherche l'hôte, par système ; `launcher.ts` écrit le lanceur sh ou .bat ; `cdp.ts` parle au port de débogage de Chrome.
-- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée), `src/export.*` (page d'export ouverte par le menu de l'icône ; format dans `src/core/export.ts`).
+- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée : `overlay.ts`, `menu.ts` pour le menu des notes, `drawing-pad.ts` pour le dessin), `src/export.*` (page d'export ouverte par le menu de l'icône ; format dans `src/core/export.ts`).
 - `tests/unit/` : tests `node:test`, lancés directement en TypeScript. `tests/e2e/` : Playwright `connectOverCDP` sur le Chrome dédié. `tests/fixtures/` : page d'essai et son petit serveur.
 - `docs/conception.md` : conception de la phase 1 (types, flux, choix).
 

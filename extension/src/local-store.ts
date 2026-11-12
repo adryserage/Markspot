@@ -11,6 +11,7 @@ import {
   type Annotation,
   type AnnotationId,
   type CaptureKind,
+  type IsoTime,
   type NewAnnotation,
 } from "../../src/core/model.ts";
 import { decodeTime } from "ulid";
@@ -60,12 +61,15 @@ export async function purgeOldDrafts(now: number): Promise<void> {
 export async function createFromDraft(
   draftId: string,
   build: (capture: CaptureResult, seq: number) => NewAnnotation,
+  /** Retouche du gros plan (dessin incrusté), faite ici pour qu'un save rejoué ne la refasse pas. */
+  retouchZone?: (png: string) => Promise<string>,
 ): Promise<Annotation> {
   const existing = (await chrome.storage.local.get(ANN + draftId))[ANN + draftId] as Annotation | undefined;
   if (existing) return existing;
   const capture = (await chrome.storage.local.get(DRAFT + draftId))[DRAFT + draftId] as CaptureResult | undefined;
   if (!capture) throw new Error("Capture expired. Mark the spot again.");
   const seq = 1 + Math.max(0, ...(await allAnnotations()).map((a) => a.seq));
+  if (retouchZone) capture.png.zone = await retouchZone(capture.png.zone);
   const annotation: Annotation = { ...build(capture, seq), schemaVersion: 1, seq };
   const items: Record<string, unknown> = { [ANN + annotation.id]: annotation };
   for (const kind of CAPTURE_KINDS) items[pngKey(annotation.id, kind)] = capture.png[kind];
@@ -89,6 +93,16 @@ export async function outboxPngs(id: AnnotationId): Promise<Record<CaptureKind, 
   const zone = items[pngKey(id, "zone")];
   const context = items[pngKey(id, "context")];
   return zone && context ? { zone, context } : null;
+}
+
+/** Change le commentaire d'une note encore en file. null si elle n'y est plus. */
+export async function editQueued(id: AnnotationId, comment: string): Promise<Annotation | null> {
+  const key = ANN + id;
+  const note = (await chrome.storage.local.get(key))[key] as Annotation | undefined;
+  if (!note) return null;
+  const next: Annotation = { ...note, comment, revision: (note.revision ?? 0) + 1, updatedAt: new Date().toISOString() as IsoTime };
+  await chrome.storage.local.set({ [key]: next });
+  return next;
 }
 
 /** Retire une note de la file une fois que l'hôte l'a écrite. */

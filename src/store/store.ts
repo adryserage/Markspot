@@ -9,6 +9,8 @@
 //
 // Aucun fichier n'a deux sortes d'écrivains : pas de verrou. Deux hôtes (Brave et Chrome
 // ouverts ensemble) peuvent créer en même temps : le numéro se réserve par fichier exclusif.
+// Retirer une note (serveur MCP, ou hôte pour une note réglée) passe par un rename atomique
+// du dossier vers .trash : de deux suppressions concurrentes, la seconde ne trouve plus rien.
 
 import { randomBytes } from "node:crypto";
 import { watch as fsWatch } from "node:fs";
@@ -65,9 +67,18 @@ export interface ThreadReader {
 
 export type ThreadChange = { kind: "upserted"; thread: Thread } | { kind: "removed"; id: AnnotationId };
 
+export type EditOutcome =
+  | { kind: "edited"; thread: Thread }
+  | { kind: "already_resolved"; thread: Thread }
+  | { kind: "not_found" };
+
 export interface HostStore extends ThreadReader {
   /** Idempotent sur annotation.id. La note apparaît entière ou pas du tout. */
   create(annotation: NewAnnotation, pngs: Record<CaptureKind, Uint8Array>): Promise<Thread>;
+  /** Remplace le commentaire d'une note ouverte. Une note réglée ne change plus. */
+  editComment(id: AnnotationId, comment: string): Promise<EditOutcome>;
+  /** Retire celles de ces notes qui sont réglées (bouton de la page). Rend les identifiants retirés. */
+  clearResolved(ids: AnnotationId[]): Promise<AnnotationId[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
 }
@@ -178,6 +189,20 @@ async function reserveSeq(paths: Layout, id: AnnotationId): Promise<number> {
   }
 }
 
+/** Retire une note : rename vers .trash puis suppression. false si elle n'existait plus. */
+async function removeNote(paths: Layout, id: AnnotationId): Promise<boolean> {
+  await mkdir(paths.trash, { recursive: true, mode: DIR_MODE });
+  const trashed = join(paths.trash, `${id}-${randomBytes(4).toString("hex")}`);
+  try {
+    await rename(paths.note(id), trashed);
+  } catch (error) {
+    if (code(error) === "ENOENT") return false; // retirée par un autre processus
+    throw error;
+  }
+  await rm(trashed, { recursive: true, force: true });
+  return true;
+}
+
 /** Retire les dossiers d'écriture abandonnés depuis plus d'une heure (un autre hôte peut écrire). */
 async function purgeStale(dir: string): Promise<void> {
   let names: string[];
@@ -201,6 +226,7 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
   await mkdir(paths.scope, { recursive: true, mode: DIR_MODE });
   await mkdir(paths.staging, { recursive: true, mode: DIR_MODE });
   await purgeStale(paths.staging);
+  await purgeStale(paths.trash);
   const read = reader(paths);
 
   return {
@@ -226,9 +252,39 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       return thread;
     },
 
+    async clearResolved(ids) {
+      const removed: AnnotationId[] = [];
+      for (const id of ids) {
+        const thread = await read.get(id);
+        // Une note réglée ne change plus : aucune course avec resolve ou editComment.
+        if (thread?.resolution && (await removeNote(paths, id))) removed.push(id);
+      }
+      return removed;
+    },
+
+    async editComment(id, comment) {
+      const thread = await read.get(id);
+      if (!thread) return { kind: "not_found" };
+      if (thread.resolution) return { kind: "already_resolved", thread };
+      if (thread.annotation.comment === comment) return { kind: "edited", thread };
+      const next: Annotation = {
+        ...thread.annotation,
+        comment,
+        revision: (thread.annotation.revision ?? 0) + 1,
+        updatedAt: new Date().toISOString() as IsoTime,
+      };
+      const file = join(paths.note(id), "annotation.json");
+      const tmp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+      await writeFile(tmp, JSON.stringify(next, null, 2), { mode: FILE_MODE });
+      await rename(tmp, file);
+      const now = await read.get(id);
+      return now ? { kind: "edited", thread: now } : { kind: "not_found" };
+    },
+
     watch(onChange) {
       const known = new Map<string, string>();
-      const fingerprint = (t: Thread) => `${t.annotation.seq}|${t.resolution?.resolvedAt ?? ""}|${t.resolution?.reply ?? ""}`;
+      const fingerprint = (t: Thread) =>
+        `${t.annotation.seq}|${t.annotation.revision ?? 0}|${t.resolution?.resolvedAt ?? ""}|${t.resolution?.reply ?? ""}`;
       let timer: NodeJS.Timeout | null = null;
       let running = Promise.resolve();
       const rescan = () =>
@@ -314,18 +370,9 @@ export async function openAgentStore(config: StoreConfig): Promise<AgentStore> {
         ...(filter.state === "all" ? {} : { state: filter.state }),
         ...(filter.urlPrefix ? { urlPrefix: filter.urlPrefix } : {}),
       });
-      await mkdir(paths.trash, { recursive: true, mode: DIR_MODE });
       const removed: AnnotationId[] = [];
       for (const { annotation } of threads) {
-        const trashed = join(paths.trash, `${annotation.id}-${randomBytes(4).toString("hex")}`);
-        try {
-          await rename(paths.note(annotation.id), trashed);
-        } catch (error) {
-          if (code(error) === "ENOENT") continue; // retirée par une autre session
-          throw error;
-        }
-        await rm(trashed, { recursive: true, force: true });
-        removed.push(annotation.id);
+        if (await removeNote(paths, annotation.id)) removed.push(annotation.id);
       }
       return removed;
     },

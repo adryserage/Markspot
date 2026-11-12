@@ -5,6 +5,7 @@
 
 import * as z from "zod/v4";
 import type { AnnotationId, ScopeId } from "./model.ts";
+import { MAX_STROKES, sanitizeStrokes } from "./drawing.ts";
 import { COMMENT_MAX, STYLE_PROPS } from "./model.ts";
 
 export const MAX_ATTRIBUTES = 40;
@@ -70,6 +71,7 @@ export const NewAnnotationSchema = z.object({
     }),
     rect: RectSchema,
     rectInAnchor: RectSchema,
+    drawing: z.array(z.unknown()).max(MAX_STROKES).optional().transform((raw) => (raw ? sanitizeStrokes(raw) : undefined)),
   }),
   viewport: z.object({ width: finite, height: finite, devicePixelRatio: finite, scrollX: finite, scrollY: finite }),
   comment: z.string().min(1).max(COMMENT_MAX),
@@ -79,6 +81,8 @@ export const NewAnnotationSchema = z.object({
 export const AnnotationSchema = NewAnnotationSchema.extend({
   schemaVersion: z.literal(1),
   seq: z.number().int().positive(),
+  revision: z.number().int().positive().optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 
 export const ResolutionSchema = z.object({
@@ -101,4 +105,11 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
     pngs: z.object({ zone: Base64Schema, context: Base64Schema }),
   }),
   z.object({ type: z.literal("capture"), requestId: z.number().int(), id: AnnotationIdSchema }),
+  z.object({
+    type: z.literal("edit"),
+    requestId: z.number().int(),
+    id: AnnotationIdSchema,
+    comment: z.string().min(1).max(COMMENT_MAX),
+  }),
+  z.object({ type: z.literal("clear"), requestId: z.number().int(), ids: z.array(AnnotationIdSchema).max(500) }),
 ]);

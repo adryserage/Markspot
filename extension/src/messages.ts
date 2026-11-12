@@ -1,5 +1,6 @@
 // Messages entre l'overlay (dans la page) et le service worker.
 
+import type { Stroke } from "../../src/core/drawing.ts";
 import type { Annotation, AnnotationId, Mark, Resolution, Viewport, ViewportRect } from "../../src/core/model.ts";
 
 /** Ce que la page affiche d'une note. pending : pas encore écrite par l'hôte. */
@@ -12,7 +13,20 @@ export interface NoteView {
 export type OverlayRequest =
   /** Capture l'onglet, garde le brouillon, rend la vignette du gros plan. */
   | { type: "capture"; zone: ViewportRect; pageZone: Mark["rect"]; viewport: Viewport }
-  | { type: "save"; draftId: string; url: string; title: string; mark: Mark; viewport: Viewport; comment: string }
+  | {
+      type: "save";
+      draftId: string;
+      url: string;
+      title: string;
+      mark: Mark;
+      viewport: Viewport;
+      comment: string;
+      /** Traits dessinés sur le gros plan, incrustés par le service worker. */
+      strokes: Stroke[];
+    }
+  | { type: "edit"; id: AnnotationId; comment: string }
+  /** Retire ces notes si elles sont réglées et sur cette page. */
+  | { type: "clear"; ids: AnnotationId[] }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
@@ -21,6 +35,8 @@ export type OverlayRequest =
 export type OverlayReply =
   | { ok: true; type: "captured"; draftId: string; png: string }
   | { ok: true; type: "saved"; note: NoteView }
+  | { ok: true; type: "edited"; note: NoteView }
+  | { ok: true; type: "cleared"; ids: AnnotationId[] }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
   | { ok: true; type: "status"; native: boolean; connected: boolean }

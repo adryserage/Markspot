@@ -8,6 +8,8 @@ import { contains, visiblePart } from "../../../src/core/geometry.ts";
 import type { Annotation, Mark, PageRect, Rect, Viewport, ViewportRect } from "../../../src/core/model.ts";
 import { OVERLAY_PORT, ask, type NoteView, type OverlayPush } from "../messages.ts";
 import { describeElement } from "./anchor.ts";
+import { DrawingPad } from "./drawing-pad.ts";
+import { NotesMenu, STATE_LABEL, stateOf } from "./menu.ts";
 import css from "./overlay.css";
 
 const DRAG_THRESHOLD = 6;
@@ -43,9 +45,8 @@ function currentViewport(): Viewport {
   };
 }
 
-type NoteState = "pending" | "open" | "resolved";
-const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
-const stateClass = (note: NoteView): NoteState => (note.pending ? "pending" : note.resolution ? "resolved" : "open");
+const stateClass = stateOf;
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -81,6 +82,7 @@ class Overlay {
   readonly #bar = el("div", "bar");
   readonly #pins = el("div", "pins");
   #panel: HTMLElement | null = null;
+  readonly #menu: NotesMenu;
 
   #mode: Mode = "idle";
   #notes: NoteView[] = [];
@@ -96,7 +98,13 @@ class Overlay {
     sheet.replaceSync(css);
     this.#root.adoptedStyleSheets = [sheet];
     this.#highlight.append(this.#label);
-    this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar);
+    this.#menu = new NotesMenu({
+      goTo: (note) => void this.#goTo(note),
+      edit: (note, comment) => this.#edit(note, comment),
+      clearResolved: (notes) => this.#clearResolved(notes),
+    });
+    this.#menu.element.hidden = true;
+    this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar, this.#menu.element);
 
     for (const [name, value] of Object.entries({
       position: "fixed",
@@ -150,6 +158,7 @@ class Overlay {
     this.#mode = "picking";
     this.#layer.classList.add("active");
     this.#pins.hidden = false;
+    this.#menu.element.hidden = false;
     this.#showBar("Clique sur un élément ou trace une zone.", true);
   }
 
@@ -162,6 +171,8 @@ class Overlay {
     this.#drag.hidden = true;
     this.#bar.hidden = true;
     this.#pins.hidden = true;
+    this.#menu.close();
+    this.#menu.element.hidden = true;
     this.#target = null;
     this.#dragStart = null;
     this.#dragging = false;
@@ -172,6 +183,11 @@ class Overlay {
     if (this.#mode === "idle" && !this.#panel) return;
     event.preventDefault();
     event.stopPropagation();
+    // Une modification en cours dans le menu s'annule d'abord, sans quitter le mode.
+    if (this.#menu.editing) {
+      this.#menu.cancelEdit();
+      return;
+    }
     if (this.#mode === "composing") {
       this.#discardDraft();
       this.#startPicking();
@@ -299,6 +315,17 @@ class Overlay {
     const panel = el("form", "panel composer");
     const preview = el("canvas", "preview");
     void drawPng(preview, png, 316, 160);
+    let pad: DrawingPad | null = null;
+    const draw = el("button", "ghost small draw", "Dessiner sur la capture");
+    draw.type = "button";
+    draw.addEventListener("click", async () => {
+      const bitmap = await createImageBitmap(new Blob([fromBase64(png)], { type: "image/png" }));
+      pad = new DrawingPad(bitmap, Math.min(560, innerWidth - 60));
+      preview.replaceWith(pad.element);
+      draw.remove();
+      panel.classList.add("wide");
+      this.#placePanel(panel, zone);
+    });
     const field = el("textarea", "comment");
     field.placeholder = "Qu'est-ce qui ne va pas ici ?";
     field.rows = 3;
@@ -311,7 +338,7 @@ class Overlay {
     const save = el("button", "primary", "Enregistrer la note");
     save.type = "submit";
     actions.append(cancel, save);
-    panel.append(preview, field, hint, actions);
+    panel.append(preview, draw, field, hint, actions);
 
     const submit = async () => {
       const comment = field.value.trim();
@@ -328,6 +355,7 @@ class Overlay {
         mark,
         viewport,
         comment,
+        strokes: pad?.strokes ?? [],
       });
       save.disabled = false;
       if (!reply.ok || reply.type !== "saved") {
@@ -371,6 +399,10 @@ class Overlay {
     this.#closePanel();
     this.#panel = panel;
     this.#root.append(panel);
+    this.#placePanel(panel, near);
+  }
+
+  #placePanel(panel: HTMLElement, near: Rect): void {
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
     const gap = 10;
@@ -403,6 +435,7 @@ class Overlay {
     if (reply.ok && reply.type === "notes") {
       this.#notes = reply.notes;
       this.#renderPins();
+      this.#menu.update(this.#notes);
     }
   }
 
@@ -429,10 +462,7 @@ class Overlay {
     this.#port = port;
     port.onMessage.addListener((push: OverlayPush) => {
       if (push.type === "note") this.#upsert(push.note);
-      else {
-        this.#notes = this.#notes.filter((n) => n.annotation.id !== push.id);
-        this.#renderPins();
-      }
+      else this.#remove([push.id]);
     });
     port.onDisconnect.addListener(() => {
       this.#port = null;
@@ -444,6 +474,48 @@ class Overlay {
       (a, b) => a.annotation.seq - b.annotation.seq,
     );
     this.#renderPins();
+    this.#menu.update(this.#notes);
+  }
+
+  #remove(ids: string[]): void {
+    const gone = new Set(ids);
+    if (!this.#notes.some((n) => gone.has(n.annotation.id))) return;
+    this.#notes = this.#notes.filter((n) => !gone.has(n.annotation.id));
+    this.#closePanel();
+    this.#renderPins();
+    this.#menu.update(this.#notes);
+  }
+
+  /** Défile jusqu'à l'élément de la note, puis ouvre sa fiche près de la pastille. */
+  async #goTo(note: NoteView): Promise<void> {
+    let anchor: Element | null = null;
+    try {
+      anchor = document.querySelector(note.annotation.mark.anchor.selector);
+    } catch {
+      anchor = null;
+    }
+    if (anchor) anchor.scrollIntoView({ block: "center", behavior: "instant" });
+    else scrollTo({ top: Math.max(0, note.annotation.mark.rect.y - innerHeight / 3), behavior: "instant" });
+    await sleep(120);
+    this.#renderPins();
+    const { x, y } = this.#pinPosition(note.annotation);
+    await this.#openCard(note, { x: x - 14, y: y - 14, width: 28, height: 28 });
+  }
+
+  async #edit(note: NoteView, comment: string): Promise<string | null> {
+    const reply = await ask({ type: "edit", id: note.annotation.id, comment });
+    if (!reply.ok) return reply.error;
+    if (reply.type !== "edited") return "réponse inattendue";
+    this.#upsert(reply.note);
+    return null;
+  }
+
+  async #clearResolved(notes: NoteView[]): Promise<string | null> {
+    const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id) });
+    if (!reply.ok) return reply.error;
+    if (reply.type !== "cleared") return "réponse inattendue";
+    this.#remove(reply.ids);
+    return null;
   }
 
   #renderPins(): void {
@@ -456,7 +528,7 @@ class Overlay {
         const { x, y } = this.#pinPosition(annotation);
         pin.style.left = `${x}px`;
         pin.style.top = `${y}px`;
-        pin.addEventListener("click", () => void this.#openCard(note, pin));
+        pin.addEventListener("click", () => void this.#openCard(note, toRect(pin.getBoundingClientRect())));
         return pin;
       }),
     );
@@ -470,7 +542,7 @@ class Overlay {
     });
   }
 
-  async #openCard(note: NoteView, pin: HTMLElement): Promise<void> {
+  async #openCard(note: NoteView, near: Rect): Promise<void> {
     const { annotation, resolution } = note;
     const panel = el("div", "panel card");
     panel.setAttribute("role", "dialog");
@@ -494,7 +566,7 @@ class Overlay {
     const actions = el("div", "actions");
     actions.append(close);
     panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
-    this.#openPanel(panel, toRect(pin.getBoundingClientRect()));
+    this.#openPanel(panel, near);
     close.focus();
 
     const reply = await ask({ type: "thumbnail", id: annotation.id });

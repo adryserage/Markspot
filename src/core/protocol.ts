@@ -18,13 +18,19 @@ export type ExtensionToHost =
   | { type: "sync"; requestId: number }
   /** Idempotent sur annotation.id. Les PNG sont en base64. */
   | { type: "create"; requestId: number; annotation: NewAnnotation; pngs: Record<CaptureKind, string> }
-  | { type: "capture"; requestId: number; id: AnnotationId };
+  | { type: "capture"; requestId: number; id: AnnotationId }
+  /** Nouveau commentaire ; refusé si la note est déjà réglée. */
+  | { type: "edit"; requestId: number; id: AnnotationId; comment: string }
+  /** Retire ces notes si elles sont réglées ; les autres restent. */
+  | { type: "clear"; requestId: number; ids: AnnotationId[] };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
   | { type: "synced"; requestId: number }
   | { type: "created"; requestId: number; thread: Thread }
   | { type: "capture"; requestId: number; png: string | null }
+  | { type: "edited"; requestId: number; thread: Thread }
+  | { type: "cleared"; requestId: number; ids: AnnotationId[] }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =
