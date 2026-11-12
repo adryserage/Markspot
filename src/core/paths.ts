@@ -17,8 +17,8 @@ export interface Paths {
   keyFile: string;
 }
 
-/** La liste des envois déjà transmis par ce poste, à côté de la clé (hors du partage). */
-export const consumedFileOf = (keyFile: string) => keyFile.replace(/dispatch\.key$/, "dispatch-consumed.json");
+/** Les envois déjà transmis par ce poste, à côté de la clé (hors du partage). */
+export const consumedDirOf = (keyFile: string) => keyFile.replace(/dispatch\.key$/, "dispatch-consumed");
 
 export function pathsFor(platform: Platform, env: Record<string, string | undefined>, home: string): Paths {
   switch (platform) {
