@@ -15,6 +15,8 @@ export interface MenuActions {
   /** Règle ces notes ; rend celles qui ont été réglées et un message s'il en manque. */
   resolveAll(notes: NoteView[]): Promise<{ done: NoteView[]; error: string | null }>;
   openExport(): Promise<string | null>;
+  /** « Envoyer à Claude » ; rend le message à afficher. */
+  sendToClaude(notes: NoteView[]): Promise<{ text: string; error: boolean }>;
 }
 
 const UNDO_MS = 8000;
@@ -35,6 +37,9 @@ export class NotesMenu {
   readonly element = el("div", "menu");
   readonly #toggle = el("button", "menu-toggle");
   readonly #quick = el("div", "quick");
+  readonly #quickSend = el("button", "quick-button send", "Envoyer à Claude");
+  readonly #sendInPanel = el("button", "primary menu-clear", "Envoyer à Claude");
+  #canSend = true;
   readonly #quickResolve = el("button", "quick-button", "Tout régler");
   readonly #quickExport = el("button", "quick-button", "Exporter");
   readonly #quickClear = el("button", "quick-button", "Effacer réglées");
@@ -83,8 +88,14 @@ export class NotesMenu {
     this.#confirm.append(this.#confirmText, answers);
     this.#confirm.hidden = true;
     this.#panel.hidden = true;
-    this.#panel.append(this.#list, this.#message, this.#clear, this.#clearAll, this.#confirm);
+    this.#panel.append(this.#list, this.#message, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
 
+    for (const button of [this.#quickSend, this.#sendInPanel]) {
+      button.type = "button";
+      button.addEventListener("click", (e) => {
+        if (e.isTrusted) void this.#send(button);
+      });
+    }
     for (const button of [this.#quickResolve, this.#quickExport, this.#quickClear, this.#quickClearAll, this.#undoButton]) {
       button.type = "button";
     }
@@ -110,7 +121,7 @@ export class NotesMenu {
     });
     this.#undo.append(this.#undoText, this.#undoButton);
     this.#undo.hidden = true;
-    this.#quick.append(this.#quickResolve, this.#quickExport, this.#quickClear, this.#quickClearAll);
+    this.#quick.append(this.#quickSend, this.#quickResolve, this.#quickExport, this.#quickClear, this.#quickClearAll);
     const top = el("div", "menu-top");
     top.append(this.#quick, this.#toggle);
     this.element.append(top, this.#undo, this.#panel);
@@ -129,6 +140,11 @@ export class NotesMenu {
     this.#clear.hidden = !notes.some((n) => stateOf(n) === "resolved");
     this.#clearAll.hidden = notes.length === 0;
     this.#quickResolve.disabled = !notes.some((n) => stateOf(n) !== "resolved");
+    const openCount = notes.filter((n) => stateOf(n) !== "resolved").length;
+    for (const button of [this.#quickSend, this.#sendInPanel]) {
+      button.hidden = !this.#canSend;
+      button.disabled = openCount === 0;
+    }
     this.#quickClear.disabled = !notes.some((n) => stateOf(n) === "resolved");
     this.#quickClearAll.disabled = notes.length === 0;
     this.#cancelClearAll();
@@ -143,10 +159,26 @@ export class NotesMenu {
     this.#setOpen(false);
   }
 
+  /** Version d'essai (pas de programme local) : pas de bouton « Envoyer à Claude ». */
+  setCanSend(canSend: boolean): void {
+    this.#canSend = canSend;
+    this.update(this.#notes);
+  }
+
+  async #send(button: HTMLButtonElement): Promise<void> {
+    const open = this.#notes.filter((n) => stateOf(n) !== "resolved");
+    if (open.length === 0) return;
+    button.disabled = true;
+    const { text, error } = await this.actions.sendToClaude(open);
+    button.disabled = false;
+    this.#say(text, error);
+  }
+
   #say(text: string, error: boolean): void {
+    // Ouvrir d'abord : l'ouverture redessine la liste et vide le message.
+    if (text) this.#setOpen(true);
     this.#message.textContent = text;
     this.#message.classList.toggle("error", error);
-    if (text) this.#setOpen(true);
   }
 
   async #resolveAll(): Promise<void> {

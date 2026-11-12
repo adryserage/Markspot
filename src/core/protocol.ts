@@ -26,7 +26,9 @@ export type ExtensionToHost =
   /** La personne règle la note à la main. */
   | { type: "resolve"; requestId: number; id: AnnotationId; reply: string }
   /** Rouvre la note si sa résolution est toujours celle de resolvedAt. */
-  | { type: "reopen"; requestId: number; id: AnnotationId; resolvedAt: string };
+  | { type: "reopen"; requestId: number; id: AnnotationId; resolvedAt: string }
+  /** « Envoyer à Claude » : ces notes, depuis cette page. */
+  | { type: "send"; requestId: number; ids: AnnotationId[]; url: string };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
@@ -37,6 +39,7 @@ export type HostReply =
   | { type: "cleared"; requestId: number; ids: AnnotationId[] }
   | { type: "resolved"; requestId: number; thread: Thread }
   | { type: "reopened"; requestId: number; thread: Thread }
+  | { type: "sent"; requestId: number; listeners: number }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =

@@ -628,3 +628,13 @@ button.danger:hover {
     display: none;
   }
 }
+
+.quick-button.send {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.quick-button.send:hover:not(:disabled) {
+  background: #2a2f3d;
+}

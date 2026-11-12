@@ -135,6 +135,21 @@ async function handle(
         });
       return;
     }
+    case "send": {
+      // Seules les notes connues et encore ouvertes partent.
+      const open: typeof message.ids = [];
+      for (const id of message.ids) {
+        const thread = await store.get(id);
+        if (thread && !thread.resolution) open.push(id);
+      }
+      if (open.length === 0) {
+        send({ type: "rejected", requestId: message.requestId, reason: "no open note" });
+        return;
+      }
+      const { listeners } = await store.send(open, message.url);
+      send({ type: "sent", requestId: message.requestId, listeners });
+      return;
+    }
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;

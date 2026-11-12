@@ -62,3 +62,29 @@ export function renderThread(thread: Thread, paths: RenderPaths, token: string):
   if (resolution) lines.push("", `Resolved ${resolution.resolvedAt} with reply: ${resolution.reply}`);
   return lines.join("\n");
 }
+
+/** Origine seule (schéma, hôte, port) : une donnée du site, sans chemin ni requête. */
+function siteOrigin(url: string): string {
+  try {
+    return new URL(url).origin.slice(0, 80);
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Résumé d'une note pour la liste. Rien de ce que la page contrôle (chemin, titre, texte,
+ * sélecteur) n'y figure : ces données passent par markspot_get_annotation, dans un bloc délimité.
+ */
+export function summary(thread: Thread) {
+  const { annotation } = thread;
+  return {
+    id: annotation.id,
+    seq: annotation.seq,
+    state: stateOf(thread),
+    site_origin: siteOrigin(annotation.page.url),
+    comment: annotation.comment,
+    createdAt: annotation.createdAt,
+    reply: thread.resolution?.reply ?? null,
+  };
+}

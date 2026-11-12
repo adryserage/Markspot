@@ -7,38 +7,12 @@ import * as z from "zod/v4";
 import { stateOf, type AnnotationId, type Thread } from "../core/model.ts";
 import { REPLY_MAX, parseAnnotationId } from "../core/schema.ts";
 import type { AgentStore } from "../store/store.ts";
-import { renderSummary, renderThread } from "./render.ts";
+import { renderSummary, renderThread, summary } from "./render.ts";
 
 const AGENT = { kind: "agent", id: "claude-code", name: "Claude" } as const;
 const CHARACTER_LIMIT = 25_000;
 /** Une image plus grosse n'est pas jointe : Claude reçoit son chemin à la place. */
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-
-/** Origine seule (schéma, hôte, port) : une donnée du site, sans chemin ni requête. */
-function siteOrigin(url: string): string {
-  try {
-    return new URL(url).origin.slice(0, 80);
-  } catch {
-    return "unknown";
-  }
-}
-
-/**
- * Résumé d'une note pour la liste. Rien de ce que la page contrôle (chemin, titre, texte,
- * sélecteur) n'y figure : ces données passent par markspot_get_annotation, dans un bloc délimité.
- */
-function summary(thread: Thread) {
-  const { annotation } = thread;
-  return {
-    id: annotation.id,
-    seq: annotation.seq,
-    state: stateOf(thread),
-    site_origin: siteOrigin(annotation.page.url),
-    comment: annotation.comment,
-    createdAt: annotation.createdAt,
-    reply: thread.resolution?.reply ?? null,
-  };
-}
 
 function idOrThrow(raw: string): AnnotationId {
   const id = parseAnnotationId(raw);
@@ -46,8 +20,11 @@ function idOrThrow(raw: string): AnnotationId {
   return id;
 }
 
-export function createServer(store: AgentStore, version: string): McpServer {
-  const server = new McpServer({ name: "markspot", version });
+export function createServer(store: AgentStore, version: string, listenCommand?: string): McpServer {
+  const instructions = listenCommand
+    ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
+    : undefined;
+  const server = new McpServer({ name: "markspot", version }, instructions ? { instructions } : {});
 
   server.registerTool(
     "markspot_list_annotations",
