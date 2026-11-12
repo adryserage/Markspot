@@ -169,7 +169,7 @@ export function openAgentStore(c: StoreConfig): Promise<AgentStore>;
 
 | Outil | Entrée | Sortie | Indices |
 |---|---|---|---|
-| `markspot_list_annotations` | `state` (open par défaut, resolved, all), `url` (préfixe), `limit`, `offset` | liste paginée : id, seq, état, adresse, commentaire, ancre | lecture seule, idempotent |
+| `markspot_list_annotations` | `state` (open par défaut, resolved, all), `url` (préfixe), `limit`, `offset` | liste paginée : id, seq, état, origine du site, commentaire (rien d'autre venu de la page) | lecture seule, idempotent |
 | `markspot_get_annotation` | `id` | texte (adresse, ancre, styles calculés, fichier source s'il est connu, fenêtre, commentaire encadré comme donnée) + deux images PNG (gros plan, puis contexte) | lecture seule, idempotent |
 | `markspot_resolve_annotation` | `id`, `reply` (1 à 4000) | « Réglée #4 », ou la réponse déjà en place | écriture, idempotent |
 | `markspot_clear_annotations` | `state` (obligatoire), `url` | nombre supprimé | destructif, idempotent |
