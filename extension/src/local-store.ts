@@ -12,6 +12,7 @@ import {
   type CaptureKind,
   type NewAnnotation,
 } from "../../src/core/model.ts";
+import { decodeTime } from "ulid";
 import { buildExport, type ExportFile } from "../../src/core/export.ts";
 import type { CaptureResult } from "./capture.ts";
 
@@ -37,6 +38,21 @@ export async function putDraft(id: string, capture: CaptureResult): Promise<void
 
 export async function discardDraft(id: string): Promise<void> {
   await chrome.storage.local.remove(DRAFT + id);
+}
+
+const DRAFT_MAX_AGE_MS = 60 * 60 * 1000;
+
+/** Un onglet fermé pendant l'écriture d'une note laisse son brouillon : on le retire après une heure. */
+export async function purgeOldDrafts(now: number): Promise<void> {
+  const stale = (await chrome.storage.local.getKeys()).filter((key) => {
+    if (!key.startsWith(DRAFT)) return false;
+    try {
+      return now - decodeTime(key.slice(DRAFT.length)) > DRAFT_MAX_AGE_MS;
+    } catch {
+      return true;
+    }
+  });
+  if (stale.length > 0) await chrome.storage.local.remove(stale);
 }
 
 /** Idempotent sur l'identifiant du brouillon, qui devient celui de l'annotation. */
