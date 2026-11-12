@@ -2,6 +2,7 @@
 // relancer install ne change rien, uninstall défait chaque étape.
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chmod, lstat, mkdir, readFile, readlink, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +13,7 @@ import { BROWSER_IDS, hostTargets, isBrowserId, type BrowserId } from "./browser
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
 import { claudeCommand, realProbe } from "./claude-command.ts";
 import { launcherFor } from "./launcher.ts";
+import { hasBlock, psBlock, rcTargets, removeBlock, shBlock, upsertBlock } from "./shell.ts";
 import { newDispatchKey, readDispatchKey } from "../store/dispatch.ts";
 
 export interface Settings {
@@ -26,6 +28,8 @@ export interface Settings {
    * entre deux postes. Le lanceur et le manifeste de l'hôte restent toujours en local.
    */
   dataDir?: string;
+  /** false : ne pas ajouter la fonction `claude` aux fichiers de démarrage du shell (--no-shell). */
+  shell?: false;
 }
 
 export interface Context extends Settings {
@@ -67,6 +71,7 @@ export async function readSettings(): Promise<Settings | null> {
       ...(saved.chromeProfile ? { chromeProfile: saved.chromeProfile } : {}),
       ...(saved.cdpUrl ? { cdpUrl: saved.cdpUrl } : {}),
       ...(saved.dataDir ? { dataDir: saved.dataDir } : {}),
+      ...(saved.shell === false ? { shell: false as const } : {}),
     };
   } catch {
     return null;
@@ -128,7 +133,60 @@ async function reg(args: string[]): Promise<{ ok: boolean; out: string }> {
 }
 
 export function installSteps(ctx: Context): InstallStep[] {
-  return [...browserSteps(ctx), ...claudeSteps(ctx)];
+  return [...browserSteps(ctx), ...shellSteps(ctx), ...claudeSteps(ctx)];
+}
+
+/**
+ * La fonction `claude` qui passe par `markspot launch`, dans chaque fichier de démarrage du shell.
+ * Avec --no-shell, install n'y touche pas ; uninstall retire toujours le bloc.
+ */
+function shellSteps(ctx: Context): InstallStep[] {
+  const wanted = ctx.shell !== false;
+  const step = (name: string, files: () => Promise<string[]>, block: string[], bomIfNonAscii = false): InstallStep => ({
+    name,
+    satisfied: async () => {
+      if (!wanted) return true;
+      for (const file of await files()) if (!hasBlock((await readOr(file)) ?? "", block)) return false;
+      return true;
+    },
+    apply: async () => {
+      if (!wanted) return;
+      for (const file of await files()) {
+        await mkdir(dirname(file), { recursive: true });
+        // writeFile garde un fichier lié (dotfiles) : le lien reste un lien.
+        await writeFile(file, upsertBlock((await readOr(file)) ?? "", block, { bomIfNonAscii }));
+      }
+    },
+    revert: async () => {
+      for (const file of await files()) {
+        const content = await readOr(file);
+        if (content !== null && content !== removeBlock(content)) await writeFile(file, removeBlock(content));
+      }
+    },
+  });
+  if (PLATFORM === "win32") {
+    return [step("shell: claude function in the PowerShell profiles", powershellProfiles, psBlock(ctx.nodePath, ctx.cliPath), true)];
+  }
+  const rcFiles = rcTargets(PLATFORM, HOME, process.env, (p) => existsSync(p));
+  return rcFiles.map((file) => step(`shell: claude function (${file})`, async () => [file], shBlock(CLI_LAUNCHER)));
+}
+
+/** Le profil de chaque PowerShell installé (7 et 5.1), tel qu'il le donne lui-même. */
+async function powershellProfiles(): Promise<string[]> {
+  const found: string[] = [];
+  for (const exe of ["pwsh", "powershell"]) {
+    try {
+      const { stdout } = await run(exe, ["-NoProfile", "-NonInteractive", "-Command", "$PROFILE.CurrentUserCurrentHost"], {
+        timeout: 20_000,
+        windowsHide: true,
+      });
+      const path = stdout.trim();
+      if (path && !found.includes(path)) found.push(path);
+    } catch {
+      // ce PowerShell n'est pas installé
+    }
+  }
+  return found;
 }
 
 function browserSteps(ctx: Context): InstallStep[] {
@@ -139,6 +197,7 @@ function browserSteps(ctx: Context): InstallStep[] {
         ...(ctx.chromeProfile ? { chromeProfile: ctx.chromeProfile } : {}),
         ...(ctx.cdpUrl ? { cdpUrl: ctx.cdpUrl } : {}),
         ...(ctx.dataDir ? { dataDir: ctx.dataDir } : {}),
+        ...(ctx.shell === false ? { shell: false } : {}),
       },
       null,
       2,

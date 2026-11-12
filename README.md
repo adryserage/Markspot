@@ -57,15 +57,17 @@ npm run build
 node dist/cli.js install
 ```
 
-Ensuite, dans Chrome ou Brave : ouvre `chrome://extensions` (ou `brave://extensions`), active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Ouvre une page et appuie sur Alt+C : l'extension se connecte au programme local. `node dist/cli.js doctor` vérifie le tout.
+Ouvre un nouveau terminal pour que la fonction `claude` soit prise. Ensuite, dans Chrome ou Brave : ouvre `chrome://extensions` (ou `brave://extensions`), active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Ouvre une page et appuie sur Alt+C : l'extension se connecte au programme local. `node dist/cli.js doctor` vérifie le tout.
 
 `install` fait, dans l'ordre :
 
 1. le réglage (`config.json`) ;
 2. le lanceur du programme local, avec le chemin complet de Node ;
 3. la déclaration du programme local pour chaque navigateur installé : un fichier dans le dossier `NativeMessagingHosts` du navigateur sous macOS et Linux, une clé de registre sous Windows (Chrome et Brave la partagent) ;
-4. le serveur MCP dans Claude Code (`claude mcp add --scope user markspot`) ;
-5. le skill « règle mes annotations » (lien dans `~/.claude/skills/markspot`).
+4. la clé qui signe les envois « Envoyer à Claude » (voir « Deux postes ») ;
+5. une fonction `claude` dans les fichiers de démarrage de ton shell (`~/.zshrc`, `~/.bashrc`, et le profil PowerShell sous Windows), entre deux lignes `# >>> markspot >>>` et `# <<< markspot <<<` : chaque session Claude Code que tu lances avec `claude` peut écouter Markspot (voir « Envoyer les notes à Claude ») ;
+6. le serveur MCP dans Claude Code (`claude mcp add --scope user markspot`) ;
+7. le skill « règle mes annotations » (lien dans `~/.claude/skills/markspot`).
 
 On peut le relancer : une étape déjà faite n'est pas refaite. `uninstall` défait chaque étape.
 
@@ -89,7 +91,9 @@ Dis « écoute mes annotations » à la session. Claude lance `markspot listen -
 
 ### Réveil automatique (aperçu de recherche)
 
-Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. Comme la session se réveille sans toi, `markspot claude` la lance avec `--permission-mode default` (Claude demande avant chaque commande), sauf si tu choisis toi-même un mode (`--permission-mode` ou `--dangerously-skip-permissions`). La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
+Après `install`, rien à retenir : quand tu lances `claude` dans un terminal, Markspot demande « Markspot écoute cette session ? [O/n] ». Entrée ou rien pendant 5 secondes : oui. `n` lance Claude sans Markspot. Si une session écoute déjà ce projet (même nom de dossier) sur ce poste, la question ne vient pas et la nouvelle session démarre sans Markspot. `claude -p`, `claude mcp …`, `claude --version` et les scripts ne sont pas touchés. Tes options passent telles quelles, ton mode de permission compris. Pour lancer Claude sans cette fonction : `command claude` (sh, zsh) ; `install --no-shell` ne l'ajoute pas. Fish et cmd.exe ne sont pas pris.
+
+Tu peux aussi lancer Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. Comme la session se réveille sans toi, `markspot claude` la lance avec `--permission-mode default` (Claude demande avant chaque commande), sauf si tu choisis toi-même un mode (`--permission-mode` ou `--dangerously-skip-permissions`). La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
 
 Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche. Pour un serveur qui n'est pas un plugin approuvé par Anthropic, Claude Code ne les ouvre qu'avec le drapeau `--dangerously-load-development-channels server:markspot`, que `markspot claude` ajoute pour toi :
 

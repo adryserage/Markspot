@@ -55,6 +55,8 @@ Une note a un de ces états :
 
 ### Le menu des notes
 
+Si le programme local n'est pas installé sur ce poste, le menu commence par « Installer Markspot sur ce poste », avec la commande à lancer dans un terminal et un bouton « Copier ». Tes notes restent alors dans le navigateur jusqu'à l'installation.
+
 Le bouton en haut à droite de la page (« 1 note », « 3 notes ») ouvre le menu des notes de la page :
 
 - un clic sur une note va à sa pastille ;
@@ -112,7 +114,7 @@ Une note qu'il ne peut pas régler reste ouverte, avec la raison.
 Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.md#envoyer-les-notes-à-claude) :
 
 - le mode écoute : dis « écoute mes annotations ». Claude lance `markspot listen` en tâche de fond, qui n'use aucun jeton pendant l'attente ;
-- le réveil automatique : lance Claude Code avec `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
+- le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds oui (ou rien pendant 5 s) à « Markspot écoute cette session ? », ou lance `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
 
 ### Les outils MCP
 
@@ -135,6 +137,7 @@ Le lanceur est `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/App
 - `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et l'aller-retour entre l'extension et le programme local ;
 - `markspot uninstall` : défait chaque étape ;
 - `markspot listen [--name <projet>] [--url <adresse>] [--timeout <secondes>]` : attend un envoi. Code 0 quand des notes arrivent, 2 après le délai (une heure par défaut) ;
+- `markspot launch [options de claude]` : ce que lance la fonction `claude` ajoutée par `install` (la question, puis claude avec ou sans Markspot) ;
 - `markspot claude [options de claude]` : lance Claude Code avec le canal Markspot, en mode « demande avant chaque commande » sauf si tu choisis un autre mode ;
 - `markspot mcp` et `markspot host` : lancés par Claude Code et par le navigateur, jamais à la main.
 

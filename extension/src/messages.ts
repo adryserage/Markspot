@@ -57,7 +57,8 @@ export type OverlayReply =
   | { ok: true; type: "targets"; listeners: PublicListener[]; chosen: SendTarget | null }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
-  | { ok: true; type: "status"; native: boolean; connected: boolean }
+  /** missing : le navigateur ne trouve pas le programme local (pas installé sur ce poste). */
+  | { ok: true; type: "status"; native: boolean; connected: boolean; missing: boolean }
   | { ok: true; type: "done" }
   | { ok: false; error: string };
 
