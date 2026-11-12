@@ -37,7 +37,8 @@ function fakeStore(): HostStore & { emit(change: ThreadChange): void } {
     clearNotes: async (ids) => ids,
     resolve: async () => ({ kind: "resolved", thread }),
     reopen: async () => ({ kind: "reopened", thread }),
-    send: async () => ({ listeners: 1 }),
+    send: async () => ({ kind: "sent", to: "markspot", listening: 1 }),
+    listeners: async () => [],
     watch(onChange) {
       listener = onChange;
       return { close() {} };

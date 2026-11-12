@@ -83,7 +83,7 @@ Pour annoter sur un poste et laisser Claude Code régler les notes depuis un aut
 node dist/cli.js install --browser all --data-dir \\serveur\partage\.local\share\markspot
 ```
 
-Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage. Dans Claude Code, « écoute mes annotations » lance le mode écoute : Claude démarre `markspot listen` en tâche de fond, qui attend sans rien coûter. Dans la page, le bouton « Envoyer à Claude » envoie les notes ouvertes à la session qui écoute (celle qui écoute ce site, sinon la plus ancienne) ; Claude les règle, puis se remet à l'écoute. Un envoi fait quand personne n'écoute attend 24 heures la prochaine session.
+Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage. Dans Claude Code, « écoute mes annotations » lance le mode écoute : Claude démarre `markspot listen` en tâche de fond, qui attend sans rien coûter. Dans la page, le bouton « Envoyer à Claude » envoie les notes ouvertes à la session choisie dans « Envoyer à » (chaque session qui écoute s'annonce avec le nom de son projet ; le choix est gardé par site) ; Claude les règle, puis se remet à l'écoute. Un envoi au projet choisi attend 24 heures que sa session écoute.
 
 ## Ajouter un navigateur
 

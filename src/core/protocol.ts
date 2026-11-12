@@ -6,6 +6,14 @@
 
 import type { AnnotationId, CaptureKind, NewAnnotation, Thread } from "./model.ts";
 
+/** Ce que la page voit d'une session qui écoute (même forme que dans src/store/dispatch.ts). */
+export interface PublicListener {
+  name: string;
+  host: string;
+  urlPrefix: string;
+  since: string;
+}
+
 export const HOST_NAME = "com.markspot.host";
 export const MAX_FRAME_TO_EXTENSION = 1024 * 1024;
 export const MAX_FRAME_TO_HOST = 64 * 1024 * 1024;
@@ -27,8 +35,10 @@ export type ExtensionToHost =
   | { type: "resolve"; requestId: number; id: AnnotationId; reply: string }
   /** Rouvre la note si sa résolution est toujours celle de resolvedAt. */
   | { type: "reopen"; requestId: number; id: AnnotationId; resolvedAt: string }
-  /** « Envoyer à Claude » : ces notes, depuis cette page. */
-  | { type: "send"; requestId: number; ids: AnnotationId[]; url: string };
+  /** « Envoyer à Claude » : ces notes, depuis cette page, au projet `to` (ou au seul qui écoute). */
+  | { type: "send"; requestId: number; ids: AnnotationId[]; url: string; to?: string }
+  /** Les sessions qui écoutent cette adresse. */
+  | { type: "listeners"; requestId: number; url: string };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
@@ -39,7 +49,10 @@ export type HostReply =
   | { type: "cleared"; requestId: number; ids: AnnotationId[] }
   | { type: "resolved"; requestId: number; thread: Thread }
   | { type: "reopened"; requestId: number; thread: Thread }
-  | { type: "sent"; requestId: number; listeners: number }
+  | { type: "sent"; requestId: number; to: string; listening: number }
+  /** Plusieurs projets écoutent et aucun n'est choisi ; ou la liste demandée. */
+  | { type: "choose"; requestId: number; listeners: PublicListener[] }
+  | { type: "listeners"; requestId: number; listeners: PublicListener[] }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =

@@ -129,5 +129,7 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
     requestId: z.number().int(),
     ids: z.array(AnnotationIdSchema).min(1).max(500),
     url: z.string().max(2000),
+    to: z.string().min(1).max(80).optional(),
   }),
+  z.object({ type: z.literal("listeners"), requestId: z.number().int(), url: z.string().max(2000) }),
 ]);
