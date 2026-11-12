@@ -23,6 +23,16 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
     host: hostname(),
   };
   const parent = process.ppid;
+  // Sous Windows, ppid ne change pas à la mort du parent : on vérifie qu'il existe encore.
+  const parentAlive = () => {
+    if (process.ppid !== parent) return false;
+    try {
+      process.kill(parent, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "EPERM";
+    }
+  };
   const stop = () => void removeBeat(config.dataDir, me.id).finally(() => process.exit(130));
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
@@ -31,7 +41,7 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
   let lastBeat = 0;
   try {
     while (Date.now() < deadline) {
-      if (process.ppid !== parent) return 3; // orpheline : ne pas voler les envois d'une autre session
+      if (!parentAlive()) return 3; // orpheline : ne pas voler les envois d'une autre session
       if (Date.now() - lastBeat >= BEAT_MS) {
         await beat(config.dataDir, me);
         lastBeat = Date.now();

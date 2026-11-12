@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, utimes } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -80,6 +80,25 @@ test("a dispatch sent while nobody listens waits for the next listener", async (
   const late = listener("late");
   await beat(dir, late);
   assert.ok(await claimNext(dir, late));
+});
+
+test("a malformed dispatch on a shared folder is ignored, a claim left by a dead listener comes back", async () => {
+  const dir = await dataDir();
+  const paths = dispatchPaths(dir);
+  await mkdir(paths.dispatch, { recursive: true });
+  await writeFile(join(paths.dispatch, "01JD8000000000000000000099.json"), JSON.stringify({ id: "../x", ids: "nope", url: 1 }));
+  const me = listener("01JD8000000000000000000077");
+  await beat(dir, me);
+  assert.equal(await claimNext(dir, me), null);
+  // Envoi réclamé par une écoute morte il y a deux minutes : repris par la suivante.
+  await mkdir(paths.claimed, { recursive: true });
+  const lost = { id: "01JD8000000000000000000055", ids, url: "http://localhost:3000/", at: "" };
+  const claimedFile = join(paths.claimed, `${lost.id}-01JD8000000000000000000066.json`);
+  await writeFile(claimedFile, JSON.stringify(lost));
+  const old = new Date(Date.now() - 120_000);
+  await utimes(claimedFile, old, old);
+  assert.equal(await claimNext(dir, me), null, "requeued during this scan");
+  assert.equal((await claimNext(dir, me))?.id, lost.id);
 });
 
 test("dead heartbeats are ignored and purged", async () => {

@@ -97,7 +97,9 @@ async function main(argv: string[]): Promise<number> {
     case "listen": {
       const { values } = parseArgs({ args: rest, options: { url: { type: "string" }, timeout: { type: "string" } } });
       const { listen } = await import("./listen.ts");
-      return listen({ urlPrefix: values.url ?? "", timeoutSeconds: Number(values.timeout ?? 3600) });
+      const timeout = Number(values.timeout ?? 3600);
+      if (!Number.isFinite(timeout) || timeout < 5) throw new Error("--timeout must be a number of seconds, 5 or more");
+      return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout });
     }
     case "install":
     case "uninstall":

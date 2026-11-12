@@ -67,6 +67,20 @@ async function fsNow(dir: string): Promise<number> {
   }
 }
 
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/** Un envoi lu sur un dossier partagé n'est pas fiable : on le vérifie avant de s'en servir. */
+function asDispatch(raw: unknown): Dispatch | null {
+  const d = raw as Partial<Dispatch> | null;
+  if (!d || typeof d.id !== "string" || !ULID.test(d.id) || typeof d.url !== "string") return null;
+  if (!Array.isArray(d.ids) || d.ids.length === 0 || d.ids.length > 500) return null;
+  if (!d.ids.every((id) => typeof id === "string" && ULID.test(id))) return null;
+  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? "") };
+}
+
+/** Envois réclamés par une écoute morte depuis plus d'une minute : remis dans la file. */
+const ABANDONED_CLAIM_MS = 60_000;
+
 async function readJsonFile<T>(path: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as T;
@@ -127,9 +141,10 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
   await mkdir(paths.claimed, { recursive: true });
   const now = await fsNow(paths.dispatch);
   const others = (await liveListeners(dataDir)).filter((l) => l.id !== me.id);
+  await requeueAbandoned(dataDir, now, new Set([me.id, ...others.map((l) => l.id)]));
   for (const name of names) {
     const file = join(paths.dispatch, name);
-    const dispatch = await readJsonFile<Dispatch>(file);
+    const dispatch = asDispatch(await readJsonFile(file));
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
     let age: number;
     try {
@@ -144,10 +159,26 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
     } catch {
       continue; // une autre écoute l'a pris (ENOENT) : on passe
     }
-    const mine = await readJsonFile<Dispatch>(claimed);
+    const mine = asDispatch(await readJsonFile(claimed));
     if (mine) return mine;
   }
   return null;
+}
+
+/** Une écoute tuée entre la réclamation et la sortie ne doit pas perdre l'envoi. */
+async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>): Promise<void> {
+  const paths = dispatchPaths(dataDir);
+  for (const name of await readdir(paths.claimed).catch(() => [] as string[])) {
+    const owner = name.replace(/\.json$/, "").split("-")[1];
+    if (!owner || alive.has(owner)) continue;
+    const file = join(paths.claimed, name);
+    try {
+      if (now - (await stat(file)).mtimeMs < ABANDONED_CLAIM_MS) continue;
+      await renameRetry(file, join(paths.dispatch, `${name.split("-")[0]}.json`));
+    } catch {
+      // déjà repris par une autre écoute
+    }
+  }
 }
 
 /** Remet un envoi réclamé dans la file (l'écoute n'a pas pu le transmettre). */
