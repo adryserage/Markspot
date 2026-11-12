@@ -1,6 +1,13 @@
 // Messages entre l'overlay (dans la page) et le service worker.
 
-import type { Annotation, AnnotationId, Mark, Viewport, ViewportRect } from "../../src/core/model.ts";
+import type { Annotation, AnnotationId, Mark, Resolution, Viewport, ViewportRect } from "../../src/core/model.ts";
+
+/** Ce que la page affiche d'une note. pending : pas encore écrite par l'hôte. */
+export interface NoteView {
+  annotation: Annotation;
+  resolution: Resolution | null;
+  pending: boolean;
+}
 
 export type OverlayRequest =
   /** Capture l'onglet, garde le brouillon, rend la vignette du gros plan. */
@@ -8,15 +15,22 @@ export type OverlayRequest =
   | { type: "save"; draftId: string; url: string; title: string; mark: Mark; viewport: Viewport; comment: string }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
-  | { type: "thumbnail"; id: AnnotationId };
+  | { type: "thumbnail"; id: AnnotationId }
+  | { type: "status" };
 
 export type OverlayReply =
   | { ok: true; type: "captured"; draftId: string; png: string }
-  | { ok: true; type: "saved"; annotation: Annotation }
-  | { ok: true; type: "annotations"; annotations: Annotation[] }
+  | { ok: true; type: "saved"; note: NoteView }
+  | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
+  | { ok: true; type: "status"; native: boolean; connected: boolean }
   | { ok: true; type: "done" }
   | { ok: false; error: string };
+
+/** Poussé par le service worker sur le port « overlay » ouvert par la page. */
+export type OverlayPush = { type: "note"; note: NoteView } | { type: "removed"; id: AnnotationId };
+
+export const OVERLAY_PORT = "markspot-overlay";
 
 export async function ask(request: OverlayRequest): Promise<OverlayReply> {
   try {

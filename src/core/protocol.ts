@@ -1,21 +1,38 @@
 // Messages entre l'extension et l'hôte natif.
 // Trames JSON précédées de leur longueur sur 4 octets little-endian (format de Chrome).
-// Chrome refuse un message de plus de 1 Mo de l'hôte vers l'extension.
+// Chrome refuse un message de plus de 1 Mo de l'hôte vers l'extension : les fils partent
+// un par un, et une capture n'est renvoyée que si elle tient dans la limite.
+// Chaque requête porte un requestId que sa réponse reprend ; les poussées n'en ont pas.
+
+import type { AnnotationId, CaptureKind, NewAnnotation, Thread } from "./model.ts";
 
 export const HOST_NAME = "com.markspot.host";
 export const MAX_FRAME_TO_EXTENSION = 1024 * 1024;
 export const MAX_FRAME_TO_HOST = 64 * 1024 * 1024;
+/** Une capture plus grosse n'est pas renvoyée à l'extension (base64 + enveloppe < 1 Mo). */
+export const MAX_CAPTURE_TO_EXTENSION = 700 * 1024;
 
-export type ExtensionToHost = { type: "ping" };
+export type ExtensionToHost =
+  | { type: "ping"; requestId: number }
+  /** Rend un « thread » par note, puis « synced ». */
+  | { type: "sync"; requestId: number }
+  /** Idempotent sur annotation.id. Les PNG sont en base64. */
+  | { type: "create"; requestId: number; annotation: NewAnnotation; pngs: Record<CaptureKind, string> }
+  | { type: "capture"; requestId: number; id: AnnotationId };
 
-export type HostToExtension =
-  | { type: "pong"; version: string; node: string }
-  | { type: "rejected"; reason: string };
+export type HostReply =
+  | { type: "pong"; requestId: number; version: string; node: string }
+  | { type: "synced"; requestId: number }
+  | { type: "created"; requestId: number; thread: Thread }
+  | { type: "capture"; requestId: number; png: string | null }
+  | { type: "rejected"; requestId: number | null; reason: string };
 
-/** Frontière côté hôte : la trame vient d'un processus qu'on ne contrôle pas. */
-export function parseExtensionMessage(raw: unknown): ExtensionToHost | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const type = (raw as { type?: unknown }).type;
-  if (type === "ping") return { type: "ping" };
-  return null;
+export type HostPush =
+  | { type: "thread"; thread: Thread }
+  | { type: "removed"; id: AnnotationId };
+
+export type HostToExtension = HostReply | HostPush;
+
+export function isReply(message: HostToExtension): message is HostReply {
+  return "requestId" in message;
 }

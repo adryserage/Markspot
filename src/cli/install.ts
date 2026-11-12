@@ -4,6 +4,7 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { currentPlatform, pathsFor } from "../core/paths.ts";
 import { HOST_NAME } from "../core/protocol.ts";
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
 
@@ -28,9 +29,12 @@ export interface InstallStep {
   revert(): Promise<void>;
 }
 
-const CONFIG_FILE = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "markspot", "config.json");
-const DATA_HOME = join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "markspot");
-const LAUNCHER = join(DATA_HOME, "bin", "markspot-host");
+const PATHS = pathsFor(currentPlatform(), process.env, homedir());
+const CONFIG_FILE = join(PATHS.configDir, "config.json");
+const LAUNCHER = join(PATHS.dataDir, "bin", "markspot-host");
+
+/** Guillemets simples pour sh : seule l'apostrophe demande un traitement. */
+const shQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 export const DEFAULT_SETTINGS: Settings = {
   chromeProfile: join(homedir(), ".config", "google-chrome"),
@@ -81,7 +85,7 @@ export async function pingThroughChrome(ctx: Context): Promise<{ ok: boolean; de
 
 export function installSteps(ctx: Context): InstallStep[] {
   const settings = JSON.stringify({ chromeProfile: ctx.chromeProfile, cdpUrl: ctx.cdpUrl }, null, 2) + "\n";
-  const launcher = `#!/bin/sh\nexec "${ctx.nodePath}" "${ctx.cliPath}" host "$@"\n`;
+  const launcher = `#!/bin/sh\nexec ${shQuote(ctx.nodePath)} ${shQuote(ctx.cliPath)} host "$@"\n`;
   const hostManifestPath = join(ctx.chromeProfile, "NativeMessagingHosts", `${HOST_NAME}.json`);
   const hostManifest =
     JSON.stringify(
