@@ -70,11 +70,24 @@ host.onPush((push) => {
 
 let flushing: Promise<void> = Promise.resolve();
 
+/**
+ * Passe après l'envoi de la file en cours. Toute écriture dans la file (modifier, régler,
+ * rouvrir une note en file) y passe : sinon l'envoi lirait la note avant le changement et le
+ * perdrait en la retirant de la file.
+ */
+function afterFlush<T>(fn: () => Promise<T>): Promise<T> {
+  const run = flushing.then(fn);
+  flushing = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 /** Envoie la file à l'hôte, dans l'ordre. create est idempotent : une coupure ne double rien. */
 function flushOutbox(): Promise<void> {
   flushing = flushing.then(async () => {
     if (!host.connected) return;
-    const resolutions = await queuedResolutions();
     for (const note of await allAnnotations()) {
       const pngs = await outboxPngs(note.id);
       if (!pngs) continue;
@@ -82,12 +95,19 @@ function flushOutbox(): Promise<void> {
       const reply = await host.request({ type: "create", annotation, pngs }).catch(() => null);
       if (reply?.type !== "created") return; // hôte parti ou note refusée : on réessaiera
       let thread = reply.thread;
-      // Réglée à la main pendant qu'elle était en file : la résolution part aussi. Un refus
-      // (hôte plus ancien) n'arrête pas l'envoi des notes suivantes.
-      const queuedResolution = resolutions.get(note.id);
+      // Réglée à la main pendant qu'elle était en file : la résolution part aussi.
+      const queuedResolution = (await queuedResolutions()).get(note.id);
       if (queuedResolution && !thread.resolution) {
         const resolved = await host.request({ type: "resolve", id: note.id, reply: queuedResolution.reply }).catch(() => null);
-        if (resolved?.type === "resolved") thread = resolved.thread;
+        if (resolved === null) return; // hôte parti : la note reste en file avec sa résolution
+        if (resolved.type === "resolved") thread = resolved.thread;
+        else {
+          // Hôte plus ancien qui refuse : la note part ouverte, et on le dit au lieu de se taire.
+          broadcast(
+            { type: "notice", text: `La note ${thread.annotation.seq} est arrivée ouverte : le programme local n'a pas pris ta résolution. Mets markspot à jour, puis règle-la à nouveau.` },
+            thread.annotation.page.url,
+          );
+        }
       }
       threads.set(thread.annotation.id, thread);
       await removeFromOutbox(note.id);
@@ -112,7 +132,7 @@ function clearOnPage(
   ids: AnnotationId[],
   includeOpen: boolean,
 ): Promise<{ ids: AnnotationId[]; error?: string }> {
-  const run = flushing.then(async () => {
+  return afterFlush(async () => {
     const wanted = new Set(ids);
     const removed: AnnotationId[] = [];
     const resolutions = await queuedResolutions();
@@ -140,11 +160,6 @@ function clearOnPage(
     }
     return { ids: removed };
   });
-  flushing = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
 }
 
 /** Vue d'une note encore en file, avec sa résolution locale. Diffusée aux onglets de sa page. */
@@ -243,7 +258,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "saved", note };
     }
     case "edit": {
-      const queued = await editQueued(request.id, request.comment.slice(0, 4000));
+      const queued = await afterFlush(() => editQueued(request.id, request.comment.slice(0, 4000)));
       if (queued === "resolved") return { ok: false, error: "note réglée : rouvre-la d'abord" };
       if (queued) {
         const note: NoteView = { annotation: queued, resolution: null, pending: true };
@@ -272,7 +287,9 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         author: LOCAL_USER,
         reply,
       };
-      if (await setQueuedResolution(request.id, resolution)) return { ok: true, type: "state", note: await queuedView(request.id) };
+      if (await afterFlush(() => setQueuedResolution(request.id, resolution))) {
+        return { ok: true, type: "state", note: await queuedView(request.id) };
+      }
       const answer = await host.request({ type: "resolve", id: request.id, reply });
       if (answer.type !== "resolved") return { ok: false, error: "note introuvable" };
       threads.set(answer.thread.annotation.id, answer.thread);
@@ -280,7 +297,9 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "state", note: hostView(answer.thread) };
     }
     case "reopen": {
-      if (await setQueuedResolution(request.id, null)) return { ok: true, type: "state", note: await queuedView(request.id) };
+      if (await afterFlush(() => setQueuedResolution(request.id, null))) {
+        return { ok: true, type: "state", note: await queuedView(request.id) };
+      }
       const known = threads.get(request.id);
       if (!known?.resolution) return { ok: false, error: "note déjà ouverte" };
       const answer = await host.request({ type: "reopen", id: request.id, resolvedAt: known.resolution.resolvedAt });
