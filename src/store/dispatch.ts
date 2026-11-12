@@ -49,11 +49,14 @@ export interface DispatchAuth {
 /** Au-delà, un envoi signé est trop vieux (ou daté dans le futur) : une copie rejouée est refusée. */
 const MAX_DISPATCH_AGE_MS = 25 * 60 * 60 * 1000;
 
+/** Le double de la fenêtre de date : les horloges des deux postes peuvent différer. */
+const CONSUMED_KEEP_MS = 2 * MAX_DISPATCH_AGE_MS;
+
 /** Un fichier vide par envoi transmis, dans un dossier local : aucune écriture partagée à perdre. */
 async function isConsumed(dir: string, id: string): Promise<boolean> {
   try {
     const at = (await stat(join(dir, id))).mtimeMs;
-    return Date.now() - at < MAX_DISPATCH_AGE_MS;
+    return Date.now() - at < CONSUMED_KEEP_MS;
   } catch {
     return false;
   }
@@ -69,7 +72,7 @@ async function pruneConsumed(dir: string): Promise<void> {
   for (const name of await readdir(dir).catch(() => [] as string[])) {
     const file = join(dir, name);
     try {
-      if (Date.now() - (await stat(file)).mtimeMs > MAX_DISPATCH_AGE_MS) await rm(file, { force: true });
+      if (Date.now() - (await stat(file)).mtimeMs > CONSUMED_KEEP_MS) await rm(file, { force: true });
     } catch {
       // déjà retirée
     }
@@ -325,9 +328,25 @@ export async function claimNext(dataDir: string, me: Listener, auth: DispatchAut
     const at = new Date();
     await utimes(claimed, at, at).catch(() => undefined);
     const mine = asDispatch(await readJsonFile(claimed), key);
+    if (!mine) {
+      // Lecture ratée (partage coupé) : l'envoi revient dans la file plutôt que d'être perdu.
+      await rename(claimed, file).catch(() => undefined);
+      continue;
+    }
     // Le fichier a pu être remplacé entre la lecture et le rename : seul celui qui a été vérifié passe.
-    if (mine && mine.sig === dispatch.sig) return mine;
-    await rm(claimed, { force: true });
+    if (mine.sig !== dispatch.sig) {
+      await rm(claimed, { force: true });
+      continue;
+    }
+    // Une copie a pu être prise au même instant par une autre écoute : la plus petite garde l'envoi.
+    const twins = (await readdir(paths.claimed).catch(() => [] as string[])).filter(
+      (n) => n.startsWith(`${dispatch.id}-`) && n !== `${dispatch.id}-${me.id}.json`,
+    );
+    if (twins.some((n) => n < `${dispatch.id}-${me.id}.json`)) {
+      await rm(claimed, { force: true });
+      continue;
+    }
+    return mine;
   }
   return null;
 }
