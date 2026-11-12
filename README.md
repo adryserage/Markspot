@@ -120,6 +120,7 @@ Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `
 
 - Aucun processus n'écoute sur le réseau. Chrome ne laisse que l'extension Markspot, reconnue par son identifiant fixe, parler à l'hôte.
 - Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent : toute personne qui peut y écrire peut y déposer une note, que Claude lira comme une demande à évaluer.
+- Sur un site en développement (Vue, Svelte, React), la note garde le nom du composant et le chemin de son fichier source tel que l'outil de build le donne. Ce chemin peut contenir ton nom d'utilisateur ; il reste dans le dossier des notes et dans l'export.
 - Les captures ne sont pas encore masquées. Ce qui est affiché à l'écran au moment de la capture (un mot de passe affiché en clair, un jeton) va dans l'image et jusqu'au modèle. La vignette montrée avant l'envoi permet d'annuler.
 
 ## Développer

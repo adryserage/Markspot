@@ -3,6 +3,7 @@
 // qu'une ancienne note (version d'essai, sans bornes) passe quand même.
 // N'est pas importé par l'extension : zod reste hors de son paquet.
 
+import { cleanSourceHint } from "./source-hint.ts";
 import * as z from "zod/v4";
 import type { AnnotationId, ScopeId } from "./model.ts";
 import { MAX_STROKES, sanitizeStrokes } from "./drawing.ts";
@@ -68,6 +69,8 @@ export const NewAnnotationSchema = z.object({
       text: clip(80),
       attributes: AttributesSchema,
       styles: StylesSchema,
+      // Un indice mal formé ne refuse jamais la note : il devient null.
+      sourceHint: z.unknown().optional().transform((raw) => (raw === undefined ? undefined : cleanSourceHint(raw))),
     }),
     rect: RectSchema,
     rectInAnchor: RectSchema,
