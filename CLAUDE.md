@@ -2,7 +2,7 @@
 
 ## Projet
 
-Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hôte natif, serveur MCP local et skill. Projet Plane `MARK`. Dépôt `adryserage/markspot`, privé jusqu'à l'accord du propriétaire.
+Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hôte natif, serveur MCP local et skill. Projet Plane `MARK`. Dépôt `adryserage/Markspot`, privé jusqu'à l'accord du propriétaire.
 
 ## Commandes
 

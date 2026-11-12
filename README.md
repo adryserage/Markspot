@@ -48,8 +48,8 @@ Les annotations sont des fichiers JSON et PNG dans `~/.local/share/markspot`.
 Il faut Node 22.18 ou plus récent et un Chrome lancé avec un port de débogage (`--remote-debugging-port`).
 
 ```sh
-git clone https://github.com/adryserage/markspot
-cd markspot
+git clone https://github.com/adryserage/Markspot
+cd Markspot
 npm install
 npm run build
 node dist/cli.js install --chrome-profile ~/.config/google-chrome --cdp http://127.0.0.1:9222
@@ -78,4 +78,4 @@ La conception est dans [docs/conception.md](docs/conception.md).
 
 ## Licence
 
-MIT
+Apache 2.0. Voir les fichiers LICENSE et NOTICE (les polices Atkinson Hyperlegible sont sous licence SIL OFL 1.1).
