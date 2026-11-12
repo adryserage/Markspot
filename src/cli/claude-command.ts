@@ -73,3 +73,18 @@ export function realProbe(): Probe {
     isFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
   };
 }
+
+/**
+ * Les options de `markspot claude` : une session réveillée seule demande la permission avant
+ * chaque commande, sauf si la personne a choisi elle-même un mode.
+ */
+export function withPermissionMode(args: string[]): string[] {
+  const chosen = args.some(
+    (a) =>
+      a === "--permission-mode" ||
+      a.startsWith("--permission-mode=") ||
+      a === "--dangerously-skip-permissions" ||
+      a === "--allow-dangerously-skip-permissions",
+  );
+  return chosen ? args : ["--permission-mode", "default", ...args];
+}

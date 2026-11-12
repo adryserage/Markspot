@@ -16,12 +16,15 @@ import {
   beat,
   claimNext,
   cleanName,
+  commentHash,
   completeClaim,
-  hasWork,
+  GRACE_MS,
+  pendingWork,
   releaseClaim,
   removeBeat,
   touchClaim,
   type Dispatch,
+  type DispatchAuth,
   type Listener,
 } from "../store/dispatch.ts";
 import type { AgentStore } from "../store/store.ts";
@@ -34,6 +37,8 @@ export interface ChannelOptions {
   store: AgentStore;
   name: string;
   push: Push;
+  /** Clé qui vérifie les envois, et liste des envois déjà transmis. */
+  auth: DispatchAuth;
   /** Délai sans signe de Claude avant de rendre l'envoi (2 minutes). */
   ackMs?: number;
   scanMs?: number;
@@ -73,6 +78,9 @@ export function startChannel(options: ChannelOptions): Channel {
   let stopped = false;
   let lastBeat = 0;
   let timer: NodeJS.Timeout | undefined;
+  /** Un envoi refusé (non signé) reste dans la file : tant qu'elle ne change pas, on la relit moins souvent. */
+  let emptyQueue = "";
+  let emptyAt = 0;
 
   const settlePending = async () => {
     const now = Date.now();
@@ -80,7 +88,7 @@ export function startChannel(options: ChannelOptions): Channel {
       const threads = await Promise.all(entry.dispatch.ids.map((n) => store.get(n)));
       if (threads.every((t) => !t || t.resolution)) {
         pending.delete(id); // tout est réglé, par Claude ou à la main
-        await completeClaim(dataDir, entry.dispatch, me);
+        await completeClaim(dataDir, entry.dispatch, me, options.auth);
       } else if (now - entry.pushedAt >= ackMs) {
         pending.delete(id);
         released.set(id, entry.dispatch.ids);
@@ -100,19 +108,28 @@ export function startChannel(options: ChannelOptions): Channel {
       await beat(dataDir, me);
       lastBeat = Date.now();
     }
-    if (!(await hasWork(dataDir))) return;
-    const dispatch = await claimNext(dataDir, me);
-    if (!dispatch) return;
+    const queue = await pendingWork(dataDir);
+    if (queue === "") return;
+    if (queue === emptyQueue && Date.now() - emptyAt < GRACE_MS) return; // rien de neuf depuis le dernier essai
+    const dispatch = await claimNext(dataDir, me, options.auth);
+    if (!dispatch) {
+      emptyQueue = queue;
+      emptyAt = Date.now();
+      return;
+    }
+    emptyQueue = "";
+    if (pending.has(dispatch.id)) return; // déjà poussé, en attente de son accusé : rien à refaire
     if (received.has(dispatch.id)) {
       received.delete(dispatch.id);
-      return completeClaim(dataDir, dispatch, me); // Claude l'avait ouvert après le délai
+      return completeClaim(dataDir, dispatch, me, options.auth); // Claude l'avait ouvert après le délai
     }
     const open = [];
-    for (const id of dispatch.ids) {
+    for (const [i, id] of dispatch.ids.entries()) {
       const thread = await store.get(id);
-      if (thread && !thread.resolution) open.push(thread);
+      // Un commentaire changé après l'envoi (sur le partage) ne part pas.
+      if (thread && !thread.resolution && commentHash(thread.annotation.comment) === dispatch.hashes[i]) open.push(thread);
     }
-    if (open.length === 0) return completeClaim(dataDir, dispatch, me);
+    if (open.length === 0) return completeClaim(dataDir, dispatch, me, options.auth);
     try {
       await push(renderDispatch(dispatch.id, open), { dispatch_id: dispatch.id, notes: String(open.length) });
     } catch {
@@ -145,7 +162,7 @@ export function startChannel(options: ChannelOptions): Channel {
       for (const [key, entry] of pending) {
         if (entry.dispatch.ids.includes(id)) {
           pending.delete(key);
-          void completeClaim(dataDir, entry.dispatch, me).catch(() => undefined);
+          void completeClaim(dataDir, entry.dispatch, me, options.auth).catch(() => undefined);
         }
       }
       for (const [key, ids] of released) {

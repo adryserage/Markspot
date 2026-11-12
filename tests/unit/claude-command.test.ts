@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { claudeCommand, cmdQuote, findClaude, type Probe } from "../../src/cli/claude-command.ts";
+import { claudeCommand, cmdQuote, findClaude, withPermissionMode, type Probe } from "../../src/cli/claude-command.ts";
 
 const win = (files: string[], env: Probe["env"]): Probe => {
   const set = new Set(files.map((f) => f.toLowerCase()));
@@ -50,4 +50,11 @@ test("other systems run claude from PATH as before", () => {
     args: ["--version"],
     verbatim: false,
   });
+});
+
+test("markspot claude asks for permission by default, unless the person chose a mode", () => {
+  assert.deepEqual(withPermissionMode(["--model", "haiku"]), ["--permission-mode", "default", "--model", "haiku"]);
+  for (const own of [["--permission-mode", "plan"], ["--permission-mode=acceptEdits"], ["--dangerously-skip-permissions"]]) {
+    assert.deepEqual(withPermissionMode(own), own);
+  }
 });
