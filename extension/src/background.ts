@@ -1,7 +1,82 @@
-// Service worker de l'extension. Garde un port natif ouvert : tant qu'il est
-// connecté, Chrome garde l'hôte en vie et ne met pas le service worker en veille.
+// Service worker de l'extension.
+// - Alt+C ou clic sur l'icône : injecte l'overlay dans l'onglet (activeTab), qui bascule le mode.
+// - Messages de l'overlay : capture, enregistrement, liste des annotations de la page.
+// - Version complète : garde un port natif ouvert vers l'hôte. La version d'essai n'en a pas.
 
+import { ulid } from "ulid";
+import {
+  LOCAL_SCOPE,
+  LOCAL_USER,
+  redactUrl,
+  type AnnotationId,
+  type IsoTime,
+} from "../../src/core/model.ts";
 import { HOST_NAME, type ExtensionToHost, type HostToExtension } from "../../src/core/protocol.ts";
+import { captureTab } from "./capture.ts";
+import { capturePng, createFromDraft, discardDraft, listForPage, putDraft } from "./local-store.ts";
+import type { OverlayReply, OverlayRequest } from "./messages.ts";
+
+declare const __MARKSPOT_NATIVE__: boolean;
+
+// ------------------------------------------------------------------ overlay
+
+async function injectOverlay(tab: chrome.tabs.Tab | undefined): Promise<void> {
+  if (tab?.id === undefined) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/overlay.js"] });
+    await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
+  } catch {
+    await chrome.action.setBadgeText({ tabId: tab.id, text: "!" });
+    await chrome.action.setTitle({ tabId: tab.id, title: "Markspot ne peut pas annoter cette page." });
+  }
+}
+
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command === "toggle-annotate") await injectOverlay(tab);
+});
+chrome.action.onClicked.addListener(injectOverlay);
+
+async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSender): Promise<OverlayReply> {
+  switch (request.type) {
+    case "capture": {
+      const windowId = sender.tab?.windowId;
+      if (windowId === undefined) return { ok: false, error: "No tab to capture." };
+      const capture = await captureTab(windowId, request.zone, request.pageZone, request.viewport);
+      const draftId = ulid();
+      await putDraft(draftId, capture);
+      return { ok: true, type: "captured", draftId, png: capture.png.zone };
+    }
+    case "save": {
+      const annotation = await createFromDraft(request.draftId, (capture) => ({
+        id: request.draftId as AnnotationId,
+        scope: LOCAL_SCOPE,
+        createdAt: new Date().toISOString() as IsoTime,
+        author: LOCAL_USER,
+        source: { kind: "extension", trust: "owner" },
+        page: { url: redactUrl(request.url), title: request.title },
+        mark: request.mark,
+        viewport: request.viewport,
+        comment: request.comment.slice(0, 4000),
+        captures: capture.meta,
+      }));
+      return { ok: true, type: "saved", annotation };
+    }
+    case "discard":
+      await discardDraft(request.draftId);
+      return { ok: true, type: "done" };
+    case "list":
+      return { ok: true, type: "annotations", annotations: await listForPage(request.url) };
+    case "thumbnail":
+      return { ok: true, type: "thumbnail", png: await capturePng(request.id, "zone") };
+  }
+}
+
+chrome.runtime.onMessage.addListener((request: OverlayRequest, sender, sendResponse) => {
+  answer(request, sender).then(sendResponse, (error: Error) => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
+
+// --------------------------------------------------------------- native host
 
 const RETRY_MIN_MS = 1_000;
 const RETRY_MAX_MS = 60_000;
@@ -13,7 +88,7 @@ let retryMs = RETRY_MIN_MS;
 const waiting: Array<(message: HostToExtension) => void> = [];
 
 function connect(): void {
-  if (port) return;
+  if (!__MARKSPOT_NATIVE__ || port) return;
   const opened = chrome.runtime.connectNative(HOST_NAME);
   port = opened;
   opened.onMessage.addListener((message: HostToExtension) => {
@@ -46,7 +121,7 @@ function request(message: ExtensionToHost): Promise<HostToExtension> {
 /** Point d'accès pour `markspot doctor` et les tests, par CDP. */
 const api = {
   ping: () => request({ type: "ping" }),
-  status: () => ({ connected: port !== null, lastError }),
+  status: () => ({ native: __MARKSPOT_NATIVE__, connected: port !== null, lastError }),
 };
 
 declare global {
