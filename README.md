@@ -31,7 +31,7 @@ Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » 
 2. Markspot garde l'adresse, l'élément (sélecteur, texte, styles calculés), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée.
 3. La boîte de commentaire s'ouvre sur la capture : tu peux dessiner dessus (flèche, rectangle, stylo) pour montrer précisément ce qui cloche.
 4. Dans Claude Code, tu demandes « règle mes annotations ». Claude lit chaque note avec ses images, trouve le fichier source, corrige et vérifie.
-5. Sur la page, la pastille passe à « réglée » et affiche la réponse de Claude.
+5. Sur la page, la pastille passe à « Réglée » et affiche la réponse de Claude.
 
 Pendant le mode annotation, le menu en haut à droite liste les notes de la page, et des boutons express à côté règlent, exportent, envoient à Claude ou effacent en un clic. Le détail est dans [docs/fonctions.md](docs/fonctions.md#le-menu-des-notes).
 
