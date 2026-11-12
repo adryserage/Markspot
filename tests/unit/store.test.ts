@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -161,6 +161,31 @@ test("the user resolves and reopens a note; a stale reopen keeps a newer reply",
   await (await openAgentStore(cfg)).resolve(note.id, "Corrigé par Claude", agent);
   assert.equal((await host.reopen(note.id, seen)).kind, "changed");
   assert.equal((await host.get(note.id))?.resolution?.reply, "Corrigé par Claude");
+});
+
+test("when link is refused (SMB share from Windows), exclusive create still lets one reply win", async () => {
+  const cfg = await config();
+  await (await openHostStore(cfg)).create(newAnnotation(), pngs);
+  const refused = Object.assign(new Error("not permitted"), { code: "EPERM" });
+  const smb = { ...cfg, linkFile: async () => Promise.reject(refused) };
+  const [a, b] = await Promise.all([openAgentStore(smb), openAgentStore(smb)]);
+  const id = (await a.list())[0]!.annotation.id;
+  const results = await Promise.all([a.resolve(id, "Un", agent), b.resolve(id, "Deux", agent)]);
+  assert.deepEqual(results.map((r) => r.kind).sort(), ["already_resolved", "resolved"]);
+  assert.equal((await a.resolve(id, (await a.get(id))!.resolution!.reply, agent)).kind, "unchanged");
+});
+
+test("an empty, old resolution file (write interrupted) no longer blocks the note", async () => {
+  const cfg = await config();
+  const host = await openHostStore(cfg);
+  const note = newAnnotation();
+  await host.create(note, pngs);
+  const file = join(cfg.dataDir, "local", note.id, "resolution.json");
+  await writeFile(file, "");
+  const old = new Date(Date.now() - 60_000);
+  await utimes(file, old, old);
+  assert.equal((await host.get(note.id))?.resolution, null);
+  assert.equal((await (await openAgentStore(cfg)).resolve(note.id, "Corrigé", agent)).kind, "resolved");
 });
 
 test("an id with a path inside is refused", () => {

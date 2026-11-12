@@ -19,6 +19,11 @@ export interface Settings {
   chromeProfile?: string;
   /** Port de débogage d'un Chrome, pour y charger l'extension et la vérifier sans clic. */
   cdpUrl?: string;
+  /**
+   * Dossier des notes, s'il n'est pas celui du système : par exemple un dossier partagé
+   * entre deux postes. Le lanceur et le manifeste de l'hôte restent toujours en local.
+   */
+  dataDir?: string;
 }
 
 export interface Context extends Settings {
@@ -54,6 +59,7 @@ export async function readSettings(): Promise<Settings | null> {
       browsers: (saved.browsers ?? DEFAULT_SETTINGS.browsers).filter(isBrowserId),
       ...(saved.chromeProfile ? { chromeProfile: saved.chromeProfile } : {}),
       ...(saved.cdpUrl ? { cdpUrl: saved.cdpUrl } : {}),
+      ...(saved.dataDir ? { dataDir: saved.dataDir } : {}),
     };
   } catch {
     return null;
@@ -125,6 +131,7 @@ function browserSteps(ctx: Context): InstallStep[] {
         browsers: ctx.browsers,
         ...(ctx.chromeProfile ? { chromeProfile: ctx.chromeProfile } : {}),
         ...(ctx.cdpUrl ? { cdpUrl: ctx.cdpUrl } : {}),
+        ...(ctx.dataDir ? { dataDir: ctx.dataDir } : {}),
       },
       null,
       2,
@@ -315,6 +322,17 @@ export async function doctor(ctx: Context, log: Log): Promise<boolean> {
     const ok = await step.satisfied();
     healthy &&= ok;
     log(`${ok ? "ok     " : "missing"}  ${step.name}`);
+  }
+  const notes = ctx.dataDir ?? PATHS.dataDir;
+  const probe = join(notes, `.doctor-${process.pid}`);
+  try {
+    await mkdir(notes, { recursive: true });
+    await writeFile(probe, "ok");
+    await rm(probe, { force: true });
+    log(`ok       notes folder (${notes})`);
+  } catch (error) {
+    healthy = false;
+    log(`failed   notes folder (${notes}): ${(error as Error).message}`);
   }
   const status = await readOr(HOST_STATUS_FILE);
   if (status) log(`         last connection of the extension to the host: ${(JSON.parse(status) as { at: string }).at}`);
