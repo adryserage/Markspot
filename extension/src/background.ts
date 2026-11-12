@@ -19,6 +19,7 @@ import {
 import { sanitizeStrokes } from "../../src/core/drawing.ts";
 import type { SendTarget } from "../../src/core/protocol.ts";
 import { burnStrokes, captureTab } from "./capture.ts";
+import { sourceHintFor } from "./source-hint.ts";
 import { createHostLink } from "./link.ts";
 import {
   allAnnotations,
@@ -240,6 +241,8 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
     }
     case "save": {
       const strokes = sanitizeStrokes(request.strokes);
+      const sourceHint = await sourceHintFor(sender.tab?.id, request.mark.anchor.selector);
+      const mark = sourceHint ? { ...request.mark, anchor: { ...request.mark.anchor, sourceHint } } : request.mark;
       const annotation = await createFromDraft(request.draftId, (capture) => ({
         id: request.draftId as AnnotationId,
         scope: LOCAL_SCOPE,
@@ -247,7 +250,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         author: LOCAL_USER,
         source: { kind: "extension", trust: "owner" },
         page: { url: redactUrl(request.url), title: request.title.slice(0, 300) },
-        mark: strokes.length > 0 ? { ...request.mark, drawing: strokes } : request.mark,
+        mark: strokes.length > 0 ? { ...mark, drawing: strokes } : mark,
         viewport: request.viewport,
         comment: request.comment.slice(0, 4000),
         captures: capture.meta,

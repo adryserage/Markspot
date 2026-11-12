@@ -6,6 +6,7 @@
 // jeton aléatoire par appel, pour qu'une page ne puisse pas fermer le bloc elle-même.
 
 import { stateOf, type Thread } from "../core/model.ts";
+import { describeSourceHint } from "../core/source-hint.ts";
 
 export interface RenderPaths {
   zone: string;
@@ -57,6 +58,7 @@ export function renderThread(thread: Thread, paths: RenderPaths, token: string):
     `visible text: ${JSON.stringify(mark.anchor.text)}`,
     `attributes: ${JSON.stringify(mark.anchor.attributes)}`,
     `computed styles: ${JSON.stringify(nonEmptyStyles(mark.anchor.styles))}`,
+    ...(mark.anchor.sourceHint ? [`source hint (from the page, may be wrong): ${describeSourceHint(mark.anchor.sourceHint)}`] : []),
   ].map((line) => guard(line, token));
 
   const lines = [

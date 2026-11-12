@@ -205,3 +205,25 @@ test("send: the same project on two machines makes two choices, and a choice wit
   assert.equal((await store.send([id], "http://localhost:3000/", "site")).kind, "choose", "an old name-only choice must not pick a machine");
   assert.deepEqual(await store.send([id], "http://localhost:3000/", "site", "AEGISZ2"), { kind: "sent", to: "site", host: "AEGISZ2", listening: 1 });
 });
+
+test("a source hint is kept through create and get; a malformed one becomes null; an old note has none", async () => {
+  const store = await openHostStore(await config());
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const withHint = (hint: unknown) => {
+    const note = newAnnotation();
+    return NewAnnotationSchema.parse({ ...note, mark: { ...note.mark, anchor: { ...note.mark.anchor, sourceHint: hint } } }) as unknown as NewAnnotation;
+  };
+  const good = withHint({ framework: "react", component: "PriceCard", file: "/src/PriceCard.tsx", line: 12, column: 5 });
+  const bad = withHint({ framework: "angular", file: { evil: true } });
+  const old = newAnnotation();
+  for (const note of [good, bad, old]) await store.create(note, { zone: png, context: png });
+  assert.deepEqual((await store.get(good.id))?.annotation.mark.anchor.sourceHint, {
+    framework: "react",
+    component: "PriceCard",
+    file: "/src/PriceCard.tsx",
+    line: 12,
+    column: 5,
+  });
+  assert.equal((await store.get(bad.id))?.annotation.mark.anchor.sourceHint, null, "a malformed hint never refuses the note");
+  assert.ok(!("sourceHint" in (await store.get(old.id))!.annotation.mark.anchor), "an old note reads back without it");
+});

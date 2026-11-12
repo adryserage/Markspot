@@ -115,6 +115,13 @@ try {
     assert.equal(note.mark.anchor.selector, "#acheter");
     assert.equal(note.mark.anchor.text, "Acheter");
     assert.equal(note.mark.anchor.styles.width, "340px");
+    assert.deepEqual(note.mark.anchor.sourceHint, {
+      framework: "vue",
+      component: "OffreBase",
+      file: "/src/components/OffreBase.vue",
+      line: null,
+      column: null,
+    }, "the source hint is read in the page and cleaned");
     assert.ok((await agentStore.capture(note.id, "zone"))?.length, "zone capture missing on disk");
     console.log(`ok: note ${note.seq} written by the host, selector ${note.mark.anchor.selector}`);
 

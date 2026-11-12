@@ -21,7 +21,7 @@ Les pages du navigateur (`chrome://`, la boutique d'extensions) ne s'annotent pa
 - Un clic marque un élément. Au survol, l'élément est encadré avec son nom.
 - Un glisser trace une zone, de la taille que tu veux.
 
-Markspot garde l'adresse de la page, l'élément (sélecteur, texte visible, attributs utiles, styles calculés), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée. Le texte tapé dans un champ n'est jamais gardé, mais ce qui est affiché à l'écran va dans les images (voir [Sécurité](../README.md#sécurité)).
+Markspot garde l'adresse de la page, l'élément (sélecteur, texte visible, attributs utiles, styles calculés, et sur un site en développement avec Vue, Svelte ou React, le composant et son fichier source), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée. Le texte tapé dans un champ n'est jamais gardé, mais ce qui est affiché à l'écran va dans les images (voir [Sécurité](../README.md#sécurité)).
 
 ### Écrire la note
 
