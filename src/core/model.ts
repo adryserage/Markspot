@@ -1,5 +1,6 @@
 // Format d'une annotation. Pur : ni Node, ni Chrome, ni fichier.
 
+import type { SourceHint } from "./source-hint.ts";
 import type { Stroke } from "./drawing.ts";
 // Voir docs/conception.md pour le rôle de chaque champ.
 
@@ -48,6 +49,8 @@ export interface ElementAnchor {
   text: string;
   attributes: Record<string, string>;
   styles: ComputedStyles;
+  /** Fichier source lu dans la page en développement (Vue, Svelte, React). Donnée de la page. */
+  sourceHint?: SourceHint | null;
 }
 
 export interface Mark {
