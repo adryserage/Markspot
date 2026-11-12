@@ -6,7 +6,7 @@
 import { hostname } from "node:os";
 import { ulid } from "ulid";
 import { renderDispatch } from "../mcp/render.ts";
-import { beat, claimNext, cleanName, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
+import { beat, claimNext, cleanName, commentHash, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../store/store.ts";
 
 const BEAT_MS = 10_000;
@@ -14,6 +14,11 @@ const SCAN_MS = 2_000;
 
 export async function listen(options: { urlPrefix: string; timeoutSeconds: number; name: string }): Promise<number> {
   const config = await loadConfig();
+  const key = config.dispatchKey ?? null;
+  if (!key) {
+    process.stderr.write("markspot: no dispatch key on this machine. Run markspot install (and copy the key from your other machine with markspot key).\n");
+    return 1;
+  }
   const store = await openAgentStore(config);
   const me: Listener = {
     id: ulid(),
@@ -48,12 +53,13 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
         await beat(config.dataDir, me);
         lastBeat = Date.now();
       }
-      const dispatch = await claimNext(config.dataDir, me);
+      const dispatch = await claimNext(config.dataDir, me, key);
       if (dispatch) {
         const open = [];
-        for (const id of dispatch.ids) {
+        for (const [i, id] of dispatch.ids.entries()) {
           const thread = await store.get(id);
-          if (thread && !thread.resolution) open.push(thread);
+          // Un commentaire changé après l'envoi (sur le partage) ne part pas.
+          if (thread && !thread.resolution && commentHash(thread.annotation.comment) === dispatch.hashes[i]) open.push(thread);
         }
         if (open.length === 0) {
           await completeClaim(config.dataDir, dispatch, me); // déjà réglées entre-temps : on continue d'écouter

@@ -89,7 +89,7 @@ Dis « écoute mes annotations » à la session. Claude lance `markspot listen -
 
 ### Réveil automatique (aperçu de recherche)
 
-Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
+Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. Comme la session se réveille sans toi, `markspot claude` la lance avec `--permission-mode default` (Claude demande avant chaque commande), sauf si tu choisis toi-même un mode (`--permission-mode` ou `--dangerously-skip-permissions`). La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
 
 Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche. Pour un serveur qui n'est pas un plugin approuvé par Anthropic, Claude Code ne les ouvre qu'avec le drapeau `--dangerously-load-development-channels server:markspot`, que `markspot claude` ajoute pour toi :
 
@@ -111,6 +111,13 @@ node dist/cli.js install --browser all --data-dir \\serveur\partage\.local\share
 ```
 
 Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage.
+
+Les deux postes signent leurs envois « Envoyer à Claude » avec la même clé : une session n'accepte que les envois signés, pour qu'un fichier déposé sur le partage ne puisse pas la réveiller. `install` crée la clé sur le premier poste. Sur le second, recopie-la une fois :
+
+1. sur le premier poste, `markspot key` affiche la clé ; enregistre-la dans un fichier (par exemple sur une clé USB) ;
+2. sur le second, `markspot install --key-file <ce fichier>`, puis supprime le fichier.
+
+La clé est rangée hors du dossier des notes (`~/.config/markspot/dispatch.key` sous Linux, `%LOCALAPPDATA%\markspot-key\dispatch.key` sous Windows). Partage seulement le dossier des notes, pas tout ton dossier personnel : sinon la clé passe aussi par le partage, et une personne qui peut y écrire peut fabriquer un envoi.
 
 ## Ajouter un navigateur
 

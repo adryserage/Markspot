@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +28,7 @@ const until = async (check: () => Promise<boolean> | boolean, ms = 3000) => {
 async function setup(id: string) {
   const dataDir = await mkdtemp(join(tmpdir(), "markspot-channel-"));
   dirs.push(dataDir);
-  const config = { dataDir, scope: LOCAL_SCOPE };
+  const config = { dataDir, scope: LOCAL_SCOPE, dispatchKey: randomBytes(32) };
   const host = await openHostStore(config);
   const rect = { x: 1, y: 2, width: 3, height: 4 };
   const note = NewAnnotationSchema.parse({
@@ -53,6 +54,7 @@ async function setup(id: string) {
     dataDir,
     store: await openAgentStore(config),
     name: "projet",
+    dispatchKey: config.dispatchKey,
     push: async (content) => void pushed.push(content),
     ackMs: 400,
     scanMs: 30,

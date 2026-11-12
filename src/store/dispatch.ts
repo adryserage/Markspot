@@ -8,12 +8,12 @@
 // ENOENT. Les âges se mesurent contre l'horloge du système de fichiers (mtime d'un fichier
 // qu'on vient d'écrire) : deux postes sur un partage n'ont pas la même heure.
 
-import { randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ulid } from "ulid";
 import type { AnnotationId } from "../core/model.ts";
-import { renameRetry } from "./store.ts";
+import { DIR_MODE, FILE_MODE, renameRetry } from "./store.ts";
 
 export interface Dispatch {
   id: string;
@@ -25,6 +25,51 @@ export interface Dispatch {
   to?: string;
   /** Poste visé, avec to : seule l'écoute de ce nom sur ce poste le prend. */
   toHost?: string;
+  /** commentHash du commentaire de chaque note, dans l'ordre de ids. */
+  hashes: string[];
+  /** HMAC-SHA256 de l'envoi par la clé du poste (signPayload). */
+  sig: string;
+}
+
+// ------------------------------------------------------------------- signature des envois
+//
+// Le dossier des notes peut être un partage réseau : toute personne qui y écrit pourrait y
+// déposer un envoi et réveiller une session Claude. Seul un envoi signé par la clé des postes
+// du propriétaire (gardée hors du dossier des notes) est pris.
+
+export const KEY_BYTES = 32;
+
+/** La clé lue dans son fichier (base64), ou null si elle manque ou n'a pas la bonne taille. */
+export async function readDispatchKey(file: string): Promise<Buffer | null> {
+  try {
+    const key = Buffer.from((await readFile(file, "utf8")).trim(), "base64");
+    return key.length === KEY_BYTES ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+export const newDispatchKey = () => randomBytes(KEY_BYTES).toString("base64");
+
+export const commentHash = (comment: string) => createHash("sha256").update(comment, "utf8").digest("hex");
+
+/** Les champs signés, dans un ordre fixe, tels qu'ils sont écrits dans le fichier. */
+function signPayload(key: Buffer, d: { id: string; ids: string[]; url: string; at: string; to?: string; toHost?: string; hashes: string[] }): string {
+  const payload = JSON.stringify(["markspot-dispatch-v1", d.id, d.ids, d.url, d.at, d.to ?? null, d.toHost ?? null, d.hashes]);
+  return createHmac("sha256", key).update(payload, "utf8").digest("base64url");
+}
+
+function signedBy(key: Buffer, raw: Partial<Dispatch>): boolean {
+  if (typeof raw.sig !== "string" || !Array.isArray(raw.hashes) || !raw.hashes.every((h) => typeof h === "string")) return false;
+  const expected = Buffer.from(signPayload(key, raw as Dispatch));
+  const given = Buffer.from(raw.sig);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+/** Crée le dossier en 0700, et resserre un dossier créé avant en 0755 (sauf sous Windows). */
+async function privateDir(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true, mode: DIR_MODE });
+  if (process.platform !== "win32") await chmod(dir, DIR_MODE).catch(() => undefined);
 }
 
 export interface Listener {
@@ -80,9 +125,9 @@ export function chooseListener(listeners: Listener[], url: string): Listener | u
 
 /** Heure du système de fichiers : mtime d'un fichier qu'on vient d'écrire. */
 async function fsNow(dir: string): Promise<number> {
-  await mkdir(dir, { recursive: true });
+  await privateDir(dir);
   const probe = join(dir, `.probe-${randomBytes(4).toString("hex")}`);
-  await writeFile(probe, "");
+  await writeFile(probe, "", { mode: FILE_MODE });
   try {
     return (await stat(probe)).mtimeMs;
   } finally {
@@ -92,15 +137,27 @@ async function fsNow(dir: string): Promise<number> {
 
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-/** Un envoi lu sur un dossier partagé n'est pas fiable : on le vérifie avant de s'en servir. */
-function asDispatch(raw: unknown): Dispatch | null {
+/** Un envoi lu sur un dossier partagé n'est pas fiable : forme, puis signature, avant tout usage. */
+function asDispatch(raw: unknown, key: Buffer | null): Dispatch | null {
   const d = raw as Partial<Dispatch> | null;
   if (!d || typeof d.id !== "string" || !ULID.test(d.id) || typeof d.url !== "string") return null;
   if (!Array.isArray(d.ids) || d.ids.length === 0 || d.ids.length > 500) return null;
   if (!d.ids.every((id) => typeof id === "string" && ULID.test(id))) return null;
+  if (typeof d.at !== "string" || !Array.isArray(d.hashes) || d.hashes.length !== d.ids.length) return null;
+  // Vérifiée sur les champs bruts, avant toute normalisation.
+  if (!key || !signedBy(key, d)) return null;
   const to = typeof d.to === "string" && d.to !== "" ? cleanName(d.to) : undefined;
   const toHost = to && typeof d.toHost === "string" && d.toHost !== "" ? cleanName(d.toHost) : undefined;
-  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? ""), ...(to ? { to } : {}), ...(toHost ? { toHost } : {}) };
+  return {
+    id: d.id,
+    ids: d.ids,
+    url: d.url,
+    at: d.at,
+    ...(to ? { to } : {}),
+    ...(toHost ? { toHost } : {}),
+    hashes: d.hashes as string[],
+    sig: d.sig as string,
+  };
 }
 
 function asListener(raw: unknown): Listener | null {
@@ -128,19 +185,26 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
 }
 
 /** Écrit un envoi entier ou rien : une écoute ne lit jamais un JSON à moitié écrit. */
-export async function writeDispatch(dataDir: string, ids: AnnotationId[], url: string, to: string, toHost?: string): Promise<Dispatch> {
+export async function writeDispatch(
+  dataDir: string,
+  key: Buffer,
+  input: { ids: AnnotationId[]; url: string; to: string; toHost?: string; hashes: string[] },
+): Promise<Dispatch> {
   const paths = dispatchPaths(dataDir);
-  await mkdir(paths.dispatch, { recursive: true });
-  const dispatch: Dispatch = {
+  await privateDir(paths.dispatch);
+  // Les champs sont normalisés avant la signature : le lecteur vérifie exactement ce qui est écrit.
+  const fields = {
     id: ulid(),
-    ids,
-    url,
+    ids: input.ids,
+    url: input.url.slice(0, 2000),
     at: new Date().toISOString(),
-    to: cleanName(to),
-    ...(toHost ? { toHost: cleanName(toHost) } : {}),
+    to: cleanName(input.to),
+    ...(input.toHost ? { toHost: cleanName(input.toHost) } : {}),
+    hashes: input.hashes,
   };
+  const dispatch: Dispatch = { ...fields, sig: signPayload(key, fields) };
   const tmp = join(paths.dispatch, `.tmp-${dispatch.id}`);
-  await writeFile(tmp, JSON.stringify(dispatch));
+  await writeFile(tmp, JSON.stringify(dispatch), { mode: FILE_MODE });
   await renameRetry(tmp, join(paths.dispatch, `${dispatch.id}.json`));
   return dispatch;
 }
@@ -165,9 +229,9 @@ export async function liveListeners(dataDir: string): Promise<Listener[]> {
 
 export async function beat(dataDir: string, me: Listener): Promise<void> {
   const paths = dispatchPaths(dataDir);
-  await mkdir(paths.listeners, { recursive: true });
+  await privateDir(paths.listeners);
   const tmp = join(paths.listeners, `.tmp-${me.id}`);
-  await writeFile(tmp, JSON.stringify(me));
+  await writeFile(tmp, JSON.stringify(me), { mode: FILE_MODE });
   await renameRetry(tmp, join(paths.listeners, `${me.id}.json`));
 }
 
@@ -179,9 +243,11 @@ export async function removeBeat(dataDir: string, id: string): Promise<void> {
  * Réclame le prochain envoi pour cette écoute, ou null. Seule l'écoute choisie le prend
  * pendant GRACE_MS ; ensuite, toute écoute dont le préfixe correspond.
  */
-export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch | null> {
+export async function claimNext(dataDir: string, me: Listener, key: Buffer | null): Promise<Dispatch | null> {
+  if (!key) return null; // sans clé, aucun envoi ne peut être vérifié
   const paths = dispatchPaths(dataDir);
-  await mkdir(paths.claimed, { recursive: true });
+  await privateDir(paths.dispatch);
+  await privateDir(paths.claimed);
   const now = await fsNow(paths.dispatch);
   const others = (await liveListeners(dataDir)).filter((l) => l.id !== me.id);
   // Avant la lecture de la file : une réclamation abandonnée y revient même si la file était vide.
@@ -190,7 +256,7 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
   if (names.length === 0) return null;
   for (const name of names) {
     const file = join(paths.dispatch, name);
-    const dispatch = asDispatch(await readJsonFile(file));
+    const dispatch = asDispatch(await readJsonFile(file), key); // non signé : laissé en place, la purge le retire
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
     // Envoi visé : seules les écoutes de ce nom, même après le délai de grâce.
     if (dispatch.to !== undefined && dispatch.to !== me.name) continue;
@@ -214,7 +280,7 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
     // rename garde l'heure d'écriture de l'envoi : l'âge d'une réclamation part de maintenant.
     const at = new Date();
     await utimes(claimed, at, at).catch(() => undefined);
-    const mine = asDispatch(await readJsonFile(claimed));
+    const mine = asDispatch(await readJsonFile(claimed), key);
     if (mine) return mine;
   }
   return null;

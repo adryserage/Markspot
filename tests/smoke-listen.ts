@@ -3,6 +3,7 @@
 // Lancer : npm run build && node tests/smoke-listen.ts
 
 import { strict as assert } from "node:assert";
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,9 +26,12 @@ try {
   const dataDir = join(home, "data");
   await mkdir(join(home, ".config", "markspot"), { recursive: true });
   await writeFile(join(home, ".config", "markspot", "config.json"), JSON.stringify({ dataDir }));
+  // La clé d'envoi du poste factice : le processus lancé la lit, le store de l'essai aussi.
+  const dispatchKey = randomBytes(32);
+  await writeFile(join(join(home, ".config", "markspot"), "dispatch.key"), dispatchKey.toString("base64"));
   const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, "share") };
 
-  const store = await openHostStore({ dataDir, scope: LOCAL_SCOPE });
+  const store = await openHostStore({ dataDir, scope: LOCAL_SCOPE, dispatchKey });
   const rect = { x: 1, y: 2, width: 3, height: 4 };
   const note = NewAnnotationSchema.parse({
     id: "01JD8000000000000000000009",

@@ -16,6 +16,7 @@ import {
   beat,
   claimNext,
   cleanName,
+  commentHash,
   completeClaim,
   hasWork,
   releaseClaim,
@@ -34,6 +35,8 @@ export interface ChannelOptions {
   store: AgentStore;
   name: string;
   push: Push;
+  /** Clé qui vérifie les envois. */
+  dispatchKey: Buffer;
   /** Délai sans signe de Claude avant de rendre l'envoi (2 minutes). */
   ackMs?: number;
   scanMs?: number;
@@ -73,6 +76,8 @@ export function startChannel(options: ChannelOptions): Channel {
   let stopped = false;
   let lastBeat = 0;
   let timer: NodeJS.Timeout | undefined;
+  /** Un envoi refusé (non signé) reste dans la file : on ne le relit qu'au rythme du battement. */
+  let lastEmptyClaim = 0;
 
   const settlePending = async () => {
     const now = Date.now();
@@ -101,16 +106,22 @@ export function startChannel(options: ChannelOptions): Channel {
       lastBeat = Date.now();
     }
     if (!(await hasWork(dataDir))) return;
-    const dispatch = await claimNext(dataDir, me);
-    if (!dispatch) return;
+    if (Date.now() - lastEmptyClaim < beatMs) return;
+    const dispatch = await claimNext(dataDir, me, options.dispatchKey);
+    if (!dispatch) {
+      lastEmptyClaim = Date.now();
+      return;
+    }
+    lastEmptyClaim = 0;
     if (received.has(dispatch.id)) {
       received.delete(dispatch.id);
       return completeClaim(dataDir, dispatch, me); // Claude l'avait ouvert après le délai
     }
     const open = [];
-    for (const id of dispatch.ids) {
+    for (const [i, id] of dispatch.ids.entries()) {
       const thread = await store.get(id);
-      if (thread && !thread.resolution) open.push(thread);
+      // Un commentaire changé après l'envoi (sur le partage) ne part pas.
+      if (thread && !thread.resolution && commentHash(thread.annotation.comment) === dispatch.hashes[i]) open.push(thread);
     }
     if (open.length === 0) return completeClaim(dataDir, dispatch, me);
     try {

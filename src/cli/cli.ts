@@ -24,6 +24,8 @@ async function writeHostStatus(): Promise<void> {
 const USAGE = `markspot ${VERSION}
 
   markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>] [--data-dir <dir>]
+  markspot install --key-file <file>   use the dispatch key of your other machine
+  markspot key                 print this machine's dispatch key (keep it secret)
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
@@ -39,6 +41,7 @@ interface Flags {
   cdp?: string | undefined;
   browser?: string | undefined;
   "data-dir"?: string | undefined;
+  "key-file"?: string | undefined;
 }
 
 async function context(flags: Flags): Promise<Context> {
@@ -58,7 +61,15 @@ async function context(flags: Flags): Promise<Context> {
   if (dataDir && !(process.platform === "win32" ? win32.isAbsolute(dataDir) : isAbsolute(dataDir))) {
     throw new Error(`--data-dir must be an absolute path (got ${dataDir})`);
   }
+  let importKey: string | undefined;
+  if (flags["key-file"]) {
+    const { readDispatchKey } = await import("../store/dispatch.ts");
+    const key = await readDispatchKey(resolve(flags["key-file"]));
+    if (!key) throw new Error(`${flags["key-file"]} does not hold a Markspot dispatch key (markspot key prints it on the other machine)`);
+    importKey = key.toString("base64");
+  }
   return {
+    ...(importKey ? { importKey } : {}),
     browsers: browsers.filter(isBrowserId),
     ...(chromeProfile ? { chromeProfile: resolve(chromeProfile) } : {}),
     ...(cdpUrl ? { cdpUrl } : {}),
@@ -104,8 +115,12 @@ async function main(argv: string[]): Promise<number> {
       // ouverture du protocole, que serveStdio ne propose pas.
       const transport = new StdioServerTransport();
       await server.connect(transport);
-      const handle = channel
+      if (channel && !config.dispatchKey) {
+        process.stderr.write("markspot: channel off, no dispatch key on this machine (run markspot install)\n");
+      }
+      const handle = channel && config.dispatchKey
         ? startChannel({
+            dispatchKey: config.dispatchKey,
             dataDir: config.dataDir,
             store,
             name: basename(process.cwd()),
@@ -127,11 +142,12 @@ async function main(argv: string[]): Promise<number> {
     }
     case "claude": {
       // Lance Claude Code avec le canal Markspot : la session se réveille à « Envoyer à Claude ».
-      const [{ spawn }, { claudeCommand, realProbe }] = await Promise.all([
+      const [{ spawn }, { claudeCommand, realProbe, withPermissionMode }] = await Promise.all([
         import("node:child_process"),
         import("./claude-command.ts"),
       ]);
-      const command = claudeCommand(["--dangerously-load-development-channels", "server:markspot", ...rest], realProbe());
+      const args = ["--dangerously-load-development-channels", "server:markspot", ...withPermissionMode(rest)];
+      const command = claudeCommand(args, realProbe());
       if (!command) {
         process.stderr.write("markspot: Claude Code not found. Install it, then run markspot claude again.\n");
         return 1;
@@ -162,6 +178,17 @@ async function main(argv: string[]): Promise<number> {
       const name = values.name ?? basename(process.cwd());
       return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout, name });
     }
+    case "key": {
+      // La clé d'envoi de ce poste, à recopier une fois sur l'autre (install --key-file).
+      const [{ readDispatchKey }, { KEY_FILE }] = await Promise.all([import("../store/dispatch.ts"), import("./install.ts")]);
+      const key = await readDispatchKey(KEY_FILE);
+      if (!key) {
+        process.stderr.write(`markspot: no dispatch key in ${KEY_FILE}; run markspot install first\n`);
+        return 1;
+      }
+      process.stdout.write(`${key.toString("base64")}\n`);
+      return 0;
+    }
     case "install":
     case "uninstall":
     case "doctor": {
@@ -172,6 +199,7 @@ async function main(argv: string[]): Promise<number> {
           cdp: { type: "string" },
           browser: { type: "string" },
           "data-dir": { type: "string" },
+          "key-file": { type: "string" },
         },
       });
       const ctx = await context(values);

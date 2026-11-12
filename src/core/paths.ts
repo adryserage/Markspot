@@ -10,6 +10,11 @@ export interface Paths {
   configDir: string;
   /** Notes, captures et lanceur de l'hôte. */
   dataDir: string;
+  /**
+   * Clé qui signe les envois « Envoyer à Claude ». Jamais dans le dossier des notes, qui peut
+   * être partagé : sous Windows et macOS, dans un dossier voisin.
+   */
+  keyFile: string;
 }
 
 export function pathsFor(platform: Platform, env: Record<string, string | undefined>, home: string): Paths {
@@ -17,17 +22,21 @@ export function pathsFor(platform: Platform, env: Record<string, string | undefi
     case "win32": {
       const local = env.LOCALAPPDATA ?? win32.join(home, "AppData", "Local");
       const dir = win32.join(local, "markspot");
-      return { configDir: dir, dataDir: dir };
+      return { configDir: dir, dataDir: dir, keyFile: win32.join(local, "markspot-key", "dispatch.key") };
     }
     case "darwin": {
-      const dir = posix.join(home, "Library", "Application Support", "markspot");
-      return { configDir: dir, dataDir: dir };
+      const support = posix.join(home, "Library", "Application Support");
+      const dir = posix.join(support, "markspot");
+      return { configDir: dir, dataDir: dir, keyFile: posix.join(support, "markspot-key", "dispatch.key") };
     }
-    case "linux":
+    case "linux": {
+      const configDir = posix.join(env.XDG_CONFIG_HOME ?? posix.join(home, ".config"), "markspot");
       return {
-        configDir: posix.join(env.XDG_CONFIG_HOME ?? posix.join(home, ".config"), "markspot"),
+        configDir,
         dataDir: posix.join(env.XDG_DATA_HOME ?? posix.join(home, ".local", "share"), "markspot"),
+        keyFile: posix.join(configDir, "dispatch.key"),
       };
+    }
   }
 }
 
