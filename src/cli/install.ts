@@ -1,9 +1,11 @@
 // install, uninstall et doctor. Chaque étape lit l'état avant d'écrire :
 // relancer install ne change rien, uninstall défait chaque étape.
 
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { chmod, lstat, mkdir, readFile, readlink, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { currentPlatform, pathsFor } from "../core/paths.ts";
 import { HOST_NAME } from "../core/protocol.ts";
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
@@ -20,6 +22,8 @@ export interface Context extends Settings {
   extensionDir: string;
   cliPath: string;
   nodePath: string;
+  /** Dossier skill/ du paquet, lié dans ~/.claude/skills/markspot. */
+  skillDir: string;
 }
 
 export interface InstallStep {
@@ -84,6 +88,10 @@ export async function pingThroughChrome(ctx: Context): Promise<{ ok: boolean; de
 }
 
 export function installSteps(ctx: Context): InstallStep[] {
+  return [...browserSteps(ctx), ...claudeSteps(ctx)];
+}
+
+function browserSteps(ctx: Context): InstallStep[] {
   const settings = JSON.stringify({ chromeProfile: ctx.chromeProfile, cdpUrl: ctx.cdpUrl }, null, 2) + "\n";
   const launcher = `#!/bin/sh\nexec ${shQuote(ctx.nodePath)} ${shQuote(ctx.cliPath)} host "$@"\n`;
   const hostManifestPath = join(ctx.chromeProfile, "NativeMessagingHosts", `${HOST_NAME}.json`);
@@ -137,6 +145,62 @@ export function installSteps(ctx: Context): InstallStep[] {
           await cdp.send("Extensions.uninstall", { id: ctx.extensionId });
         } finally {
           cdp.close();
+        }
+      },
+    },
+  ];
+}
+
+const run = promisify(execFile);
+
+/** Lance la CLI de Claude Code. ok=false si elle échoue ou n'est pas installée. */
+async function claude(args: string[]): Promise<{ ok: boolean; missing: boolean }> {
+  try {
+    await run("claude", args, { timeout: 60_000, windowsHide: true, shell: process.platform === "win32" });
+    return { ok: true, missing: false };
+  } catch (error) {
+    return { ok: false, missing: (error as NodeJS.ErrnoException).code === "ENOENT" };
+  }
+}
+
+const SKILL_LINK = join(homedir(), ".claude", "skills", "markspot");
+
+function claudeSteps(ctx: Context): InstallStep[] {
+  return [
+    {
+      name: "MCP server in Claude Code (claude mcp add --scope user markspot)",
+      satisfied: async () => (await claude(["mcp", "get", "markspot"])).ok,
+      apply: async () => {
+        const result = await claude(["mcp", "add", "--scope", "user", "markspot", "--", ctx.nodePath, ctx.cliPath, "mcp"]);
+        if (result.missing) throw new Error("Claude Code CLI not found in PATH; install Claude Code, then run markspot install again");
+        if (!result.ok) throw new Error("claude mcp add failed");
+      },
+      revert: async () => void (await claude(["mcp", "remove", "--scope", "user", "markspot"])),
+    },
+    {
+      name: `skill (${SKILL_LINK})`,
+      satisfied: async () => {
+        try {
+          return (await readlink(SKILL_LINK)).replace(/[\\/]+$/, "") === ctx.skillDir;
+        } catch {
+          return false;
+        }
+      },
+      apply: async () => {
+        await mkdir(dirname(SKILL_LINK), { recursive: true });
+        try {
+          if ((await lstat(SKILL_LINK)).isSymbolicLink()) await unlink(SKILL_LINK);
+          else throw new Error(`${SKILL_LINK} exists and is not a link; move it away first`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        await symlink(ctx.skillDir, SKILL_LINK, "junction");
+      },
+      revert: async () => {
+        try {
+          if ((await lstat(SKILL_LINK)).isSymbolicLink()) await unlink(SKILL_LINK);
+        } catch {
+          // déjà absent
         }
       },
     },
