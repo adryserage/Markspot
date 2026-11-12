@@ -92,6 +92,30 @@ try {
     assert.equal(note.mark.anchor.text, "Acheter");
     assert.equal(note.mark.anchor.styles.width, "340px");
     console.log(`ok: note ${note.seq} stored, selector ${note.mark.anchor.selector}; screenshots in ${ARTIFACTS}`);
+
+    // Export : le fichier contient la note et ses deux images.
+    const exported = (await evaluateInExtension(direct, EXTENSION_ID, "globalThis.markspot.exportAll()")) as {
+      format: string;
+      annotations: Array<{ seq: number; png: { zone: string | null; context: string | null } }>;
+    };
+    const inExport = exported.annotations.find((a) => a.seq === note.seq);
+    assert.equal(exported.format, "markspot-export");
+    assert.ok(inExport?.png.zone && inExport.png.context, "export lacks the captures");
+
+    // La page d'export s'ouvre et compte les notes ; téléchargements refusés pendant l'essai.
+    await cdp.send("Browser.setDownloadBehavior", { behavior: "deny" });
+    try {
+      const exportPage = await context.newPage();
+      await exportPage.goto(`chrome-extension://${EXTENSION_ID}/dist/export.html`);
+      await exportPage.locator("#download:not([hidden])").waitFor();
+      const status = await exportPage.locator("#status").textContent();
+      assert.match(status ?? "", /prêtes? \(\d+ Ko\)/);
+      await exportPage.screenshot({ path: join(ARTIFACTS, "5-export.png") });
+      await exportPage.close();
+      console.log(`ok: export page says "${status}"`);
+    } finally {
+      await cdp.send("Browser.setDownloadBehavior", { behavior: "default" });
+    }
     // Retire les notes de la page d'essai, pour ne pas les retrouver au prochain passage.
     await evaluateInExtension(
       direct,

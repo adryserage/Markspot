@@ -21,7 +21,7 @@ Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hô
 - `src/core/` : types et protocole, sans dépendance à Node ni à Chrome. `build.ts` reçoit l'identifiant de l'extension et la version au build.
 - `src/host/host.ts` : hôte natif (trames de 4 octets, contrôle de l'origine).
 - `src/cli/` : binaire `markspot` ; `install.ts` contient les étapes `{ satisfied, apply, revert }` d'install, d'uninstall et de doctor ; `cdp.ts` parle au port de débogage de Chrome.
-- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée).
+- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée), `src/export.*` (page d'export ouverte par le menu de l'icône ; format dans `src/core/export.ts`).
 - `tests/unit/` : tests `node:test`, lancés directement en TypeScript. `tests/e2e/` : Playwright `connectOverCDP` sur le Chrome dédié. `tests/fixtures/` : page d'essai et son petit serveur.
 - `docs/conception.md` : conception de la phase 1 (types, flux, choix).
 

@@ -24,6 +24,10 @@ node build.mjs --trial ./markspot-essai
 
 Dans Chrome, ouvre `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `markspot-essai`. Sur une page, appuie sur Alt+C ou clique sur l'icône Markspot. Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
 
+Pour donner tes notes à Claude Code avant l'arrivée du serveur MCP : clic droit sur l'icône Markspot, « Exporter les notes ». Tu obtiens un fichier JSON avec chaque note et ses deux images, à enregistrer là où Claude Code peut le lire.
+
+Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » dans `chrome://extensions`. Ne supprime pas l'extension : ses notes partiraient avec elle.
+
 ## Comment ça marche
 
 1. Dans Chrome, tu appuies sur Alt+C, tu cliques sur un élément ou tu traces une zone, puis tu écris ton commentaire.
