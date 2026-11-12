@@ -143,6 +143,7 @@ class Overlay {
     this.#closePanel();
     this.#mode = "picking";
     this.#layer.classList.add("active");
+    this.#pins.hidden = false;
     this.#showBar("Clique sur un élément ou trace une zone.", true);
   }
 
@@ -154,6 +155,7 @@ class Overlay {
     this.#highlight.hidden = true;
     this.#drag.hidden = true;
     this.#bar.hidden = true;
+    this.#pins.hidden = true;
     this.#target = null;
     this.#dragStart = null;
     this.#dragging = false;
@@ -426,7 +428,7 @@ class Overlay {
   }
 
   #schedule(): void {
-    if (this.#frame) return;
+    if (this.#frame || this.#mode === "idle") return;
     this.#frame = requestAnimationFrame(() => {
       this.#frame = 0;
       this.#renderPins();
