@@ -1,7 +1,7 @@
 // Point d'entrée du binaire `markspot`.
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
@@ -22,7 +22,7 @@ async function writeHostStatus(): Promise<void> {
 
 const USAGE = `markspot ${VERSION}
 
-  markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>]
+  markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>] [--data-dir <dir>]
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
@@ -33,6 +33,7 @@ interface Flags {
   "chrome-profile"?: string | undefined;
   cdp?: string | undefined;
   browser?: string | undefined;
+  "data-dir"?: string | undefined;
 }
 
 async function context(flags: Flags): Promise<Context> {
@@ -47,10 +48,16 @@ async function context(flags: Flags): Promise<Context> {
   if (unknown.length > 0) throw new Error(`unknown browser ${unknown.join(", ")}; known: ${BROWSER_IDS.join(", ")}, all`);
   const chromeProfile = flags["chrome-profile"] ?? saved.chromeProfile;
   const cdpUrl = flags.cdp ?? saved.cdpUrl;
+  // Chemin absolu exigé : l'hôte démarre avec le dossier courant du navigateur.
+  const dataDir = flags["data-dir"] ?? saved.dataDir;
+  if (dataDir && !(process.platform === "win32" ? win32.isAbsolute(dataDir) : isAbsolute(dataDir))) {
+    throw new Error(`--data-dir must be an absolute path (got ${dataDir})`);
+  }
   return {
     browsers: browsers.filter(isBrowserId),
     ...(chromeProfile ? { chromeProfile: resolve(chromeProfile) } : {}),
     ...(cdpUrl ? { cdpUrl } : {}),
+    ...(dataDir ? { dataDir } : {}),
     extensionId: EXTENSION_ID,
     extensionDir: join(dirname(cliPath), "..", "extension"),
     cliPath,
@@ -90,7 +97,12 @@ async function main(argv: string[]): Promise<number> {
     case "doctor": {
       const { values } = parseArgs({
         args: rest,
-        options: { "chrome-profile": { type: "string" }, cdp: { type: "string" }, browser: { type: "string" } },
+        options: {
+          "chrome-profile": { type: "string" },
+          cdp: { type: "string" },
+          browser: { type: "string" },
+          "data-dir": { type: "string" },
+        },
       });
       const ctx = await context(values);
       if (command === "install") await install(ctx, log);

@@ -75,6 +75,16 @@ Options :
 
 Les notes sont rangées dans `%LOCALAPPDATA%\markspot` sous Windows, `~/Library/Application Support/markspot` sous macOS et `~/.local/share/markspot` sous Linux.
 
+## Deux postes, un seul dossier de notes
+
+Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
+
+```sh
+node dist/cli.js install --browser all --data-dir \\serveur\partage\.local\share\markspot
+```
+
+Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage. Dans Claude Code, « écoute mes annotations » lance le mode écoute : Claude attend chaque nouvelle note, la règle, puis attend la suivante.
+
 ## Ajouter un navigateur
 
 Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `src/cli/browsers.ts` : une entrée qui dit où le navigateur cherche le programme local sur chaque système. `install`, `uninstall` et `doctor` la prennent d'eux-mêmes. Ajoute son test dans `tests/unit/browsers.test.ts`.
@@ -82,7 +92,7 @@ Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `
 ## Sécurité
 
 - Aucun processus n'écoute sur le réseau. Chrome ne laisse que l'extension Markspot, reconnue par son identifiant fixe, parler à l'hôte.
-- Les fichiers sont créés avec les droits 0600 et les dossiers avec 0700.
+- Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent.
 - Les captures ne sont pas encore masquées. Ce qui est affiché à l'écran au moment de la capture (un mot de passe affiché en clair, un jeton) va dans l'image et jusqu'au modèle. La vignette montrée avant l'envoi permet d'annuler.
 
 ## Développer

@@ -94,6 +94,57 @@ export function createServer(store: AgentStore, version: string): McpServer {
   );
 
   server.registerTool(
+    "markspot_wait_for_annotations",
+    {
+      title: "Wait for new annotations",
+      description:
+        "Listen mode: wait until the user leaves a new note in the browser, then return the new open notes (same " +
+        "fields as markspot_list_annotations). Pass last_seq from the previous call as after_seq to keep listening " +
+        "without missing or repeating a note. Returns an empty list when the timeout expires.",
+      inputSchema: z.strictObject({
+        after_seq: z.number().int().min(0).optional().describe("Return notes with a pin number above this; default: the highest at call time"),
+        url: z.string().optional().describe("Only notes whose page URL starts with this"),
+        timeout_seconds: z.number().int().min(5).max(600).default(300),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ after_seq, url, timeout_seconds }, ctx) => {
+      const signal = (ctx as { mcpReq?: { signal?: AbortSignal } } | undefined)?.mcpReq?.signal;
+      const filter = url ? { urlPrefix: url } : {};
+      // Par numéro de pastille, pas par date : les horloges du navigateur et de ce poste peuvent différer.
+      const baseline = after_seq ?? Math.max(0, ...(await store.list(filter)).map((t) => t.annotation.seq));
+      const deadline = Date.now() + timeout_seconds * 1000;
+      while (Date.now() < deadline && !signal?.aborted) {
+        const fresh = (await store.list({ ...filter, state: "open" })).filter((t) => t.annotation.seq > baseline);
+        if (fresh.length > 0) {
+          const result = {
+            last_seq: Math.max(...fresh.map((t) => t.annotation.seq)),
+            annotations: fresh.slice(0, 20).map(summary),
+          };
+          return {
+            content: [{ type: "text", text: `${fresh.map(renderSummary).join("\n")}\n\n${JSON.stringify(result)}` }],
+            structuredContent: result,
+          };
+        }
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", done);
+            resolve();
+          };
+          const timer = setTimeout(done, 2000);
+          signal?.addEventListener("abort", done, { once: true });
+        });
+      }
+      const result = { last_seq: baseline, annotations: [] as ReturnType<typeof summary>[] };
+      return {
+        content: [{ type: "text", text: `No new note after ${timeout_seconds} s. Call again with after_seq ${baseline} to keep listening.\n\n${JSON.stringify(result)}` }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "markspot_get_annotation",
     {
       title: "Get annotation",
