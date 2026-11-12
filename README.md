@@ -98,6 +98,8 @@ Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche
 
 Le message poussé dans la session contient seulement le numéro, l'identifiant et le commentaire de chaque note. Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
 
+Claude Code ne confirme pas la réception. Si la session n'a pas ouvert le canal (avertissement refusé, canaux désactivés par l'administrateur), l'envoi se perd et les notes restent ouvertes dans la page : renvoie-les après avoir dit « écoute mes annotations » à la session.
+
 ## Deux postes, un seul dossier de notes
 
 Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
