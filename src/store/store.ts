@@ -209,7 +209,8 @@ async function reserveSeq(paths: Layout, id: AnnotationId): Promise<number> {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-const STALE_RESOLUTION_MS = 10_000;
+/** Large : l'horloge du serveur de partage peut différer de celle de ce poste. */
+const STALE_RESOLUTION_MS = 60_000;
 
 /**
  * Rename avec trois essais : sous Windows, un fichier tenu (antivirus, indexation) rend
@@ -233,12 +234,19 @@ async function renameRetry(from: string, to: string): Promise<void> {
  * on le retire, sinon plus personne ne pourrait régler la note.
  */
 async function dropStaleResolution(file: string): Promise<void> {
+  let text: string;
+  let age: number;
   try {
-    const info = await stat(file);
-    if (Date.now() - info.mtimeMs < STALE_RESOLUTION_MS) return;
-    JSON.parse(await readFile(file, "utf8"));
-  } catch (error) {
-    if (code(error) === "ENOENT") return;
+    age = Date.now() - (await stat(file)).mtimeMs;
+    text = await readFile(file, "utf8");
+  } catch {
+    return; // absent, ou erreur passagère du partage : ne rien retirer
+  }
+  if (age < STALE_RESOLUTION_MS) return;
+  try {
+    JSON.parse(text);
+  } catch {
+    // Seul un fichier vide ou illisible et ancien est retiré.
     await unlink(file).catch(() => undefined);
   }
 }

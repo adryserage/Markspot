@@ -80,7 +80,7 @@ try {
 
   // Mode écoute : une note créée pendant l'attente réveille l'appel.
   const second = { ...note, id: "01JD8000000000000000000002" } as typeof note;
-  const waiting = client.callTool({ name: "markspot_wait_for_annotations", arguments: { timeout_seconds: 20 } });
+  const waiting = client.callTool({ name: "markspot_wait_for_annotations", arguments: { after_seq: 1, timeout_seconds: 20 } });
   setTimeout(() => void store.create(second, { zone: png, context: png }), 1000);
   const woke = await waiting;
   const wokeData = woke.structuredContent as { last_seq: number; annotations: Array<{ id: string }> };
