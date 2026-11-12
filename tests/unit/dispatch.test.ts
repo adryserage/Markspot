@@ -171,3 +171,18 @@ test("dead heartbeats are ignored and purged", async () => {
   await purgeDispatch(dir);
   assert.deepEqual((await readdir(dispatchPaths(dir).listeners)).filter((n) => n.endsWith(".json")), []);
 });
+
+test("a dispatch aimed at a project on one machine is never taken by the same name on another", async () => {
+  const dir = await dataDir();
+  const linux = { ...listener("01JD8000000000000000000061", "", "2026-11-12T07:00:00.000Z", "site"), host: "ADMSI" };
+  const windows = { ...listener("01JD8000000000000000000062", "", "2026-11-12T08:00:00.000Z", "site"), host: "AEGISZ2" };
+  await beat(dir, linux);
+  await beat(dir, windows);
+  await writeDispatch(dir, ids, "http://localhost:3000/", "site", "AEGISZ2");
+  const old = new Date(Date.now() - 60_000);
+  for (const n of await readdir(dispatchPaths(dir).dispatch)) {
+    if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
+  }
+  assert.equal(await claimNext(dir, linux), null, "same name, other machine: never, even after the grace period");
+  assert.equal((await claimNext(dir, windows))?.toHost, "AEGISZ2");
+});

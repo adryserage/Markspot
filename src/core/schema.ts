@@ -130,6 +130,8 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
     ids: z.array(AnnotationIdSchema).min(1).max(500),
     url: z.string().max(2000),
     to: z.string().min(1).max(80).optional(),
+    /** Poste visé : deux dossiers de même nom sous Linux et Windows restent deux choix. */
+    host: z.string().min(1).max(80).optional(),
   }),
   z.object({ type: z.literal("listeners"), requestId: z.number().int(), url: z.string().max(2000) }),
 ]);
