@@ -142,7 +142,7 @@ export function installSteps(ctx: Context): InstallStep[] {
  */
 function shellSteps(ctx: Context): InstallStep[] {
   const wanted = ctx.shell !== false;
-  const step = (name: string, files: () => Promise<string[]>, block: string[]): InstallStep => ({
+  const step = (name: string, files: () => Promise<string[]>, block: string[], bomIfNonAscii = false): InstallStep => ({
     name,
     satisfied: async () => {
       if (!wanted) return true;
@@ -154,7 +154,7 @@ function shellSteps(ctx: Context): InstallStep[] {
       for (const file of await files()) {
         await mkdir(dirname(file), { recursive: true });
         // writeFile garde un fichier lié (dotfiles) : le lien reste un lien.
-        await writeFile(file, upsertBlock((await readOr(file)) ?? "", block));
+        await writeFile(file, upsertBlock((await readOr(file)) ?? "", block, { bomIfNonAscii }));
       }
     },
     revert: async () => {
@@ -165,7 +165,7 @@ function shellSteps(ctx: Context): InstallStep[] {
     },
   });
   if (PLATFORM === "win32") {
-    return [step("shell: claude function in the PowerShell profiles", powershellProfiles, psBlock(ctx.nodePath, ctx.cliPath))];
+    return [step("shell: claude function in the PowerShell profiles", powershellProfiles, psBlock(ctx.nodePath, ctx.cliPath), true)];
   }
   const rcFiles = rcTargets(PLATFORM, HOME, process.env, (p) => existsSync(p));
   return rcFiles.map((file) => step(`shell: claude function (${file})`, async () => [file], shBlock(CLI_LAUNCHER)));

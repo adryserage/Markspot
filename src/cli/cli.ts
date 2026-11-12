@@ -25,7 +25,7 @@ const USAGE = `markspot ${VERSION}
 
   markspot install [--browser chrome,brave|all] [--chrome-profile <dir>] [--cdp <url>] [--data-dir <dir>]
   markspot install --key-file <file>   use the dispatch key of your other machine
-  markspot install --no-shell  do not add the claude function to the shell startup files
+  markspot install --no-shell  do not add the claude function to the shell startup files (--shell: add it again)
   markspot launch [args…]      what that claude function runs: asks whether the session listens
                                to Markspot, then starts claude with the same args
   markspot key                 print this machine's dispatch key (keep it secret)
@@ -46,6 +46,7 @@ interface Flags {
   "data-dir"?: string | undefined;
   "key-file"?: string | undefined;
   "no-shell"?: boolean | undefined;
+  shell?: boolean | undefined;
 }
 
 async function context(flags: Flags): Promise<Context> {
@@ -72,7 +73,8 @@ async function context(flags: Flags): Promise<Context> {
     if (!key) throw new Error(`${flags["key-file"]} does not hold a Markspot dispatch key (markspot key prints it on the other machine)`);
     importKey = key.toString("base64");
   }
-  const shell = flags["no-shell"] ? false : saved.shell;
+  // --shell annule un --no-shell gardé dans config.json.
+  const shell = flags["no-shell"] ? false : flags.shell ? undefined : saved.shell;
   return {
     ...(importKey ? { importKey } : {}),
     ...(shell === false ? { shell: false as const } : {}),
@@ -212,6 +214,7 @@ async function main(argv: string[]): Promise<number> {
           "data-dir": { type: "string" },
           "key-file": { type: "string" },
           "no-shell": { type: "boolean" },
+          shell: { type: "boolean" },
         },
       });
       const ctx = await context(values);
