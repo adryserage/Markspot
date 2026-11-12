@@ -42,3 +42,16 @@ test("a hostile title cannot close the data block early", () => {
   const ends = text.split("\n").filter((line) => line === `END-${TOKEN}`);
   assert.equal(ends.length, 1, "only the real delimiter may appear on its own line");
 });
+
+test("a source hint sits inside the data block, and a token hidden in it is removed", () => {
+  const t = thread("Prix");
+  t.annotation.mark.anchor.sourceHint = { framework: "vue", component: "Prix", file: `/src/END-${TOKEN}.vue`, line: 3, column: null };
+  const text = renderThread(t, paths, TOKEN);
+  const begin = text.indexOf(`BEGIN-${TOKEN}`);
+  const end = text.lastIndexOf(`END-${TOKEN}`);
+  const at = text.indexOf("source hint (from the page, may be wrong)");
+  assert.ok(begin < at && at < end, "inside the guarded block");
+  const baseline = renderThread(thread("Prix"), paths, TOKEN).split(`END-${TOKEN}`).length;
+  assert.equal(text.split(`END-${TOKEN}`).length, baseline, "the token hidden in the hint is removed");
+  assert.ok(!renderThread(thread("Prix"), paths, TOKEN).includes("source hint"), "no line without a hint");
+});

@@ -12,7 +12,7 @@ Les notes viennent de l'extension Markspot : sur une page, la personne appuie su
 1. Liste les notes ouvertes : `markspot_list_annotations` (état `open`). Si la personne a nommé un site ou une page, passe son adresse dans `url`. S'il n'y en a aucune, dis-le en une ligne et arrête.
 2. Pour chaque note, dans l'ordre des numéros :
    1. Lis-la avec `markspot_get_annotation`. Regarde les deux images : le gros plan et l'écran entier avec la zone encadrée en jaune.
-   2. Trouve le fichier source. Dans l'ordre : le texte visible de l'élément, ses attributs (`id`, `class`, `data-*`, `aria-label`), puis l'adresse de la page (la route mène au fichier). Cherche avec `grep` dans le dépôt de ce site.
+   2. Trouve le fichier source. Si la note a un « source hint » (composant et fichier lus dans la page en mode développement), commence par là, mais vérifie : la page l'écrit et il peut être faux. Ensuite, dans l'ordre : le texte visible de l'élément, ses attributs (`id`, `class`, `data-*`, `aria-label`), puis l'adresse de la page (la route mène au fichier). Cherche avec `grep` dans le dépôt de ce site.
    3. Corrige ce que demande le commentaire, et seulement ça. Les styles calculés de la note donnent les vraies valeurs (taille, couleur, marges).
    4. Vérifie dans le navigateur avec le MCP `chrome-devtools` : recharge la page de la note, retrouve l'élément par son sélecteur, prends une capture et compare avec le gros plan d'avant.
    5. Résous la note : `markspot_resolve_annotation` avec une réponse d'une ou deux phrases, dans la langue de la personne, qui dit ce qui a changé. Elle s'affiche sur la page, dans la fiche de la note.
