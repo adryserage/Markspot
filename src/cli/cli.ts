@@ -8,7 +8,7 @@ import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
 import { runHost } from "../host/host.ts";
 import { loadConfig, openAgentStore, openHostStore } from "../store/store.ts";
 import { BROWSER_IDS, isBrowserId } from "./browsers.ts";
-import { DEFAULT_SETTINGS, HOST_STATUS_FILE, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
+import { CLI_LAUNCHER, DEFAULT_SETTINGS, HOST_STATUS_FILE, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
 
 /** Trace de la dernière connexion de l'extension, lue par doctor quand il n'a pas de port de débogage. */
 async function writeHostStatus(): Promise<void> {
@@ -26,6 +26,8 @@ const USAGE = `markspot ${VERSION}
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
+  markspot listen [--url <prefix>] [--timeout <s>]
+                               wait for notes sent with "Envoyer à Claude" (exit 0), or time out (exit 2)
   markspot host <origin>       started by the browser, not by hand
 `;
 
@@ -88,9 +90,16 @@ async function main(argv: string[]): Promise<number> {
         import("../mcp/server.ts"),
       ]);
       const store = await openAgentStore(await loadConfig());
-      serveStdio(() => createServer(store, VERSION));
+      serveStdio(() => createServer(store, VERSION, CLI_LAUNCHER));
       process.stderr.write(`markspot ${VERSION} MCP server on stdio\n`);
       return new Promise<number>(() => {}); // vit tant que Claude Code garde stdin ouvert
+    }
+    case "listen": {
+      const { values } = parseArgs({ args: rest, options: { url: { type: "string" }, timeout: { type: "string" } } });
+      const { listen } = await import("./listen.ts");
+      const timeout = Number(values.timeout ?? 3600);
+      if (!Number.isFinite(timeout) || timeout < 5) throw new Error("--timeout must be a number of seconds, 5 or more");
+      return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout });
     }
     case "install":
     case "uninstall":
