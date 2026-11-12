@@ -6,12 +6,7 @@ Tout reste sur ton poste : aucune donnée envoyée ailleurs, aucune télémétri
 
 ## État
 
-Version 0.1, en construction. Ce qui marche aujourd'hui :
-
-- le mode annotation dans Chrome : Alt+C, surbrillance, clic sur un élément ou zone tracée, commentaire avec la vignette de la capture, pastilles numérotées ;
-- l'installation et le lien entre l'extension et le programme local (`markspot doctor` le vérifie).
-
-Les notes restent pour l'instant dans le navigateur. Le stockage en fichiers, le serveur MCP et le skill arrivent ensuite.
+Version 0.1, en construction. La boucle complète marche : tu annotes dans Chrome ou Brave, Claude Code lit la note avec ses deux images, corrige, puis la résout, et la pastille passe à « réglée » avec sa réponse. L'installation sous Windows et macOS n'a pas encore été essayée sur une vraie machine.
 
 ## Essayer l'annotation seule
 
@@ -45,20 +40,39 @@ Les annotations sont des fichiers JSON et PNG dans `~/.local/share/markspot`.
 
 ## Installer
 
-Il faut Node 22.18 ou plus récent et un Chrome lancé avec un port de débogage (`--remote-debugging-port`).
+Markspot marche sous Windows, macOS et Linux, avec Chrome et Brave. Il faut Node 22.18 ou plus récent et Claude Code.
 
 ```sh
 git clone https://github.com/adryserage/Markspot
 cd Markspot
 npm install
 npm run build
-node dist/cli.js install --chrome-profile ~/.config/google-chrome --cdp http://127.0.0.1:9222
-node dist/cli.js doctor
+node dist/cli.js install
 ```
 
-`install` écrit le réglage, le lanceur de l'hôte, la déclaration de l'hôte dans le profil Chrome, puis charge l'extension par le port de débogage. On peut le relancer : une étape déjà faite n'est pas refaite. `uninstall` défait chaque étape.
+Ensuite, dans Chrome ou Brave : ouvre `chrome://extensions` (ou `brave://extensions`), active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Ouvre une page et appuie sur Alt+C : l'extension se connecte au programme local. `node dist/cli.js doctor` vérifie le tout.
 
-Si Chrome refuse le chargement par le port de débogage, ouvre `chrome://extensions`, active le mode développeur et charge le dossier `extension/` à la main.
+`install` fait, dans l'ordre :
+
+1. le réglage (`config.json`) ;
+2. le lanceur du programme local, avec le chemin complet de Node ;
+3. la déclaration du programme local pour chaque navigateur installé : un fichier dans le dossier `NativeMessagingHosts` du navigateur sous macOS et Linux, une clé de registre sous Windows (Chrome et Brave la partagent) ;
+4. le serveur MCP dans Claude Code (`claude mcp add --scope user markspot`) ;
+5. le skill « règle mes annotations » (lien dans `~/.claude/skills/markspot`).
+
+On peut le relancer : une étape déjà faite n'est pas refaite. `uninstall` défait chaque étape.
+
+Options :
+
+- `--browser chrome`, `--browser brave` ou `--browser all` (par défaut) ;
+- `--chrome-profile <dossier>` pour un Chrome lancé avec `--user-data-dir` ;
+- `--cdp http://127.0.0.1:9222` pour un Chrome lancé avec un port de débogage : `install` y charge alors l'extension tout seul.
+
+Les notes sont rangées dans `%LOCALAPPDATA%\markspot` sous Windows, `~/Library/Application Support/markspot` sous macOS et `~/.local/share/markspot` sous Linux.
+
+## Ajouter un navigateur
+
+Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `src/cli/browsers.ts` : une entrée qui dit où le navigateur cherche le programme local sur chaque système. `install`, `uninstall` et `doctor` la prennent d'eux-mêmes. Ajoute son test dans `tests/unit/browsers.test.ts`.
 
 ## Sécurité
 
