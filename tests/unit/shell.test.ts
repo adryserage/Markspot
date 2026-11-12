@@ -26,13 +26,16 @@ test("a Windows profile keeps its BOM and CRLF line endings", () => {
   assert.ok(!once.replaceAll("\r\n", "").includes("\n"), "CRLF everywhere");
   assert.ok(hasBlock(once, ps));
   assert.equal(removeBlock(once), original);
-  assert.ok(ps.every((line) => /^[\x20-\x7e]*$/.test(line)), "ASCII only, for PowerShell 5.1 without BOM");
+  const accented = psBlock("C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\Élodie\\markspot\\dist\\cli.js");
+  assert.ok(upsertBlock("# profil\r\n", accented, { bomIfNonAscii: true }).startsWith("\uFEFF"), "an accented path gets a BOM for PowerShell 5.1");
+  assert.ok(!upsertBlock("# profil\r\n", ps, { bomIfNonAscii: true }).startsWith("\uFEFF"), "an ASCII block leaves the file as it was");
 });
 
 test("paths are quoted for sh and PowerShell", () => {
   assert.ok(shBlock("/home/o'brien/bin/markspot").some((l) => l.includes(`'/home/o'\\''brien/bin/markspot'`)));
   assert.equal(psQuote("C:\\Users\\Jean D'Arc"), "'C:\\Users\\Jean D''Arc'");
   assert.equal(block[0], BEGIN);
+  assert.ok(block.indexOf("unalias claude 2>/dev/null") < block.indexOf("function claude {"), "an older alias cannot break the function");
   assert.equal(block.at(-1), END);
 });
 

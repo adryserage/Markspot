@@ -18,6 +18,8 @@ export function shBlock(launcher: string): string[] {
     BEGIN,
     "# Added by markspot install, removed by markspot uninstall: each interactive claude session",
     "# can listen to Markspot's \"Envoyer a Claude\" (markspot launch).",
+    // Un alias claude défini plus haut serait développé dans la définition : on le retire d'abord.
+    "unalias claude 2>/dev/null",
     "function claude {",
     `  if [ -x ${q} ]; then ${q} launch "$@"; else command claude "$@"; fi`,
     "}",
@@ -65,9 +67,14 @@ export function hasBlock(content: string, block: string[]): boolean {
   return range !== null && lines.slice(range[0], range[1] + 1).join("\n") === block.join("\n");
 }
 
-/** Remplace le bloc, ou l'ajoute à la fin après une ligne vide. */
-export function upsertBlock(content: string, block: string[]): string {
-  const { bom, eol, lines } = split(content);
+/**
+ * Remplace le bloc, ou l'ajoute à la fin après une ligne vide. bomIfNonAscii : PowerShell 5.1 lit
+ * un fichier sans BOM comme de l'ANSI, donc un chemin accentué (C:\Users\Élodie) demande un BOM.
+ */
+export function upsertBlock(content: string, block: string[], options: { bomIfNonAscii?: boolean } = {}): string {
+  const parts = split(content);
+  const { eol, lines } = parts;
+  const bom = parts.bom || (options.bomIfNonAscii && /[^\x00-\x7f]/.test(block.join("")) ? BOM : "");
   const range = blockRange(lines);
   if (range) {
     lines.splice(range[0], range[1] - range[0] + 1, ...block);
