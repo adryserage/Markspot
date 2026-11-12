@@ -9,7 +9,7 @@
 // qu'on vient d'écrire) : deux postes sur un partage n'ont pas la même heure.
 
 import { randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ulid } from "ulid";
 import type { AnnotationId } from "../core/model.ts";
@@ -159,6 +159,9 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
     } catch {
       continue; // une autre écoute l'a pris (ENOENT) : on passe
     }
+    // rename garde l'heure d'écriture de l'envoi : l'âge d'une réclamation part de maintenant.
+    const at = new Date();
+    await utimes(claimed, at, at).catch(() => undefined);
     const mine = asDispatch(await readJsonFile(claimed));
     if (mine) return mine;
   }
@@ -179,6 +182,11 @@ async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>
       // déjà repris par une autre écoute
     }
   }
+}
+
+/** L'envoi a été transmis à la session : il disparaît, il ne peut plus revenir dans la file. */
+export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Listener): Promise<void> {
+  await rm(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), { force: true });
 }
 
 /** Remet un envoi réclamé dans la file (l'écoute n'a pas pu le transmettre). */

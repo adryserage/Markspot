@@ -6,7 +6,7 @@
 import { hostname } from "node:os";
 import { ulid } from "ulid";
 import { renderSummary, summary } from "../mcp/render.ts";
-import { beat, claimNext, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
+import { beat, claimNext, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../store/store.ts";
 
 const BEAT_MS = 10_000;
@@ -53,7 +53,10 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
           const thread = await store.get(id);
           if (thread && !thread.resolution) open.push(thread);
         }
-        if (open.length === 0) continue; // déjà réglées entre-temps : on continue d'écouter
+        if (open.length === 0) {
+          await completeClaim(config.dataDir, dispatch, me); // déjà réglées entre-temps : on continue d'écouter
+          continue;
+        }
         const result = { dispatch: dispatch.id, annotations: open.map(summary) };
         const text = [
           `Markspot: ${open.length} note${open.length > 1 ? "s" : ""} sent with "Envoyer à Claude".`,
@@ -62,12 +65,12 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
           JSON.stringify(result),
           "",
         ].join("\n");
-        try {
-          process.stdout.write(text);
-        } catch {
+        const written = await new Promise<boolean>((resolve) => process.stdout.write(text, (error) => resolve(!error)));
+        if (!written) {
           await releaseClaim(config.dataDir, dispatch, me);
           return 1;
         }
+        await completeClaim(config.dataDir, dispatch, me);
         return 0;
       }
       await new Promise((r) => setTimeout(r, SCAN_MS));
