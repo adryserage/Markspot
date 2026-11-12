@@ -107,6 +107,18 @@ class Overlay {
       clearAll: (notes) => this.#clearNotes(notes, true),
       setResolved: (note, resolved) => this.#setResolved(note, resolved),
       resolveAll: (notes) => this.#resolveAll(notes),
+      sendToClaude: async (notes) => {
+        const reply = await ask({ type: "send", ids: notes.map((n) => n.annotation.id) });
+        if (!reply.ok) return { text: `Non envoyé : ${reply.error}`, error: true };
+        if (reply.type !== "sent") return { text: "Non envoyé : réponse inattendue", error: true };
+        const what = reply.count === 1 ? "1 note envoyée" : `${reply.count} notes envoyées`;
+        return reply.listeners > 0
+          ? { text: `${what} à Claude.`, error: false }
+          : {
+              text: `${what}. Aucune session n'écoute pour l'instant : dis « écoute mes annotations » dans Claude Code, elle les prendra.`,
+              error: false,
+            };
+      },
       openExport: async () => {
         const reply = await ask({ type: "openExport" });
         return reply.ok ? null : reply.error;
@@ -153,6 +165,8 @@ class Overlay {
   async toggle(): Promise<void> {
     if (this.#mode === "idle") {
       this.#listen();
+      const status = await ask({ type: "status" });
+      this.#menu.setCanSend(status.ok && status.type === "status" && status.native);
       await this.#refresh();
       this.#startPicking();
     } else {

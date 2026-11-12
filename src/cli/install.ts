@@ -49,6 +49,8 @@ const HOME = homedir();
 const PATHS = pathsFor(PLATFORM, process.env, HOME);
 const CONFIG_FILE = join(PATHS.configDir, "config.json");
 export const HOST_STATUS_FILE = join(PATHS.dataDir, "host-status.json");
+/** La commande markspot pour les sessions Claude Code (markspot listen), toujours sur le poste. */
+export const CLI_LAUNCHER = join(PATHS.dataDir, "bin", launcherFor(PLATFORM, "", "", "cli").fileName);
 
 export const DEFAULT_SETTINGS: Settings = { browsers: [...BROWSER_IDS] };
 
@@ -138,6 +140,7 @@ function browserSteps(ctx: Context): InstallStep[] {
     ) + "\n";
   const launcher = launcherFor(PLATFORM, ctx.nodePath, ctx.cliPath);
   const launcherPath = join(PATHS.dataDir, "bin", launcher.fileName);
+  const cliLauncher = launcherFor(PLATFORM, ctx.nodePath, ctx.cliPath, "cli");
   const hostManifest =
     JSON.stringify(
       {
@@ -163,6 +166,12 @@ function browserSteps(ctx: Context): InstallStep[] {
       satisfied: async () => (await readOr(launcherPath)) === launcher.content,
       apply: () => writePrivate(launcherPath, launcher.content, launcher.mode),
       revert: () => rm(launcherPath, { force: true }),
+    },
+    {
+      name: `markspot command (${CLI_LAUNCHER})`,
+      satisfied: async () => (await readOr(CLI_LAUNCHER)) === cliLauncher.content,
+      apply: () => writePrivate(CLI_LAUNCHER, cliLauncher.content, cliLauncher.mode),
+      revert: () => rm(CLI_LAUNCHER, { force: true }),
     },
   ];
 
