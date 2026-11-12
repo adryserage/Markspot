@@ -136,12 +136,13 @@ export async function removeBeat(dataDir: string, id: string): Promise<void> {
  */
 export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch | null> {
   const paths = dispatchPaths(dataDir);
-  const names = (await readdir(paths.dispatch).catch(() => [] as string[])).filter((n) => n.endsWith(".json")).sort();
-  if (names.length === 0) return null;
   await mkdir(paths.claimed, { recursive: true });
   const now = await fsNow(paths.dispatch);
   const others = (await liveListeners(dataDir)).filter((l) => l.id !== me.id);
+  // Avant la lecture de la file : une réclamation abandonnée y revient même si la file était vide.
   await requeueAbandoned(dataDir, now, new Set([me.id, ...others.map((l) => l.id)]));
+  const names = (await readdir(paths.dispatch).catch(() => [] as string[])).filter((n) => n.endsWith(".json")).sort();
+  if (names.length === 0) return null;
   for (const name of names) {
     const file = join(paths.dispatch, name);
     const dispatch = asDispatch(await readJsonFile(file));
