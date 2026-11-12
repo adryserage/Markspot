@@ -32,6 +32,8 @@ export type OverlayRequest =
   | { type: "reopen"; id: AnnotationId }
   /** Ouvre la page d'export dans un nouvel onglet. */
   | { type: "openExport" }
+  /** « Envoyer à Claude » : les notes ouvertes de la page, à la session qui écoute. */
+  | { type: "send"; ids: AnnotationId[] }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
@@ -44,6 +46,7 @@ export type OverlayReply =
   /** error : une partie seulement a été effacée (ids dit lesquelles). */
   | { ok: true; type: "cleared"; ids: AnnotationId[]; error?: string }
   | { ok: true; type: "state"; note: NoteView }
+  | { ok: true; type: "sent"; count: number; listeners: number }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
   | { ok: true; type: "status"; native: boolean; connected: boolean }

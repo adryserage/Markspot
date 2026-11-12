@@ -93,6 +93,8 @@ export interface HostStore extends ThreadReader {
    * réponse l'a remplacée entre-temps, rien n'est retiré (changed).
    */
   reopen(id: AnnotationId, resolvedAt: string): Promise<ReopenOutcome>;
+  /** « Envoyer à Claude » : dépose un envoi pour la session qui écoute. Rend le nombre de sessions à l'écoute. */
+  send(ids: AnnotationId[], url: string): Promise<{ listeners: number }>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
 }
@@ -216,7 +218,7 @@ const STALE_RESOLUTION_MS = 60_000;
  * Rename avec trois essais : sous Windows, un fichier tenu (antivirus, indexation) rend
  * EPERM, EBUSY ou EACCES pendant quelques instants.
  */
-async function renameRetry(from: string, to: string): Promise<void> {
+export async function renameRetry(from: string, to: string): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {
       await rename(from, to);
@@ -384,6 +386,14 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
     },
 
     resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
+
+    async send(ids, url) {
+      const { chooseListener, liveListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
+      await purgeDispatch(config.dataDir);
+      await writeDispatch(config.dataDir, ids, url);
+      const listeners = (await liveListeners(config.dataDir)).filter((l) => chooseListener([l], url));
+      return { listeners: listeners.length };
+    },
 
     async reopen(id, resolvedAt) {
       const thread = await read.get(id);

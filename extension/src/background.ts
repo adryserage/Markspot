@@ -267,6 +267,20 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
       return { ok: true, type: "state", note: hostView(answer.thread) };
     }
+    case "send": {
+      if (!__MARKSPOT_NATIVE__) return { ok: false, error: "la version d'essai n'a pas de programme local" };
+      if (!sender.url) return { ok: false, error: "page inconnue" };
+      const page = pageKeyOf(sender.url);
+      await flushOutbox(); // les notes encore en file partent d'abord au programme local
+      const ids = request.ids.filter((id) => {
+        const thread = threads.get(id);
+        return thread && !thread.resolution && pageKeyOf(thread.annotation.page.url) === page;
+      });
+      if (ids.length === 0) return { ok: false, error: "aucune note ouverte reçue par le programme local" };
+      const reply = await host.request({ type: "send", ids, url: sender.url });
+      if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local" };
+      return { ok: true, type: "sent", count: ids.length, listeners: reply.listeners };
+    }
     case "openExport":
       await openExportPage(sender.tab);
       return { ok: true, type: "done" };

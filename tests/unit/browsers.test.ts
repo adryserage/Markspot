@@ -47,6 +47,11 @@ test("Windows launcher: CRLF, quoted paths, percent doubled", () => {
   assert.equal(bat.content, '@echo off\r\n"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\ada\\100%%\\cli.js" host %*\r\n');
 });
 
+test("the cli launcher runs markspot itself, without the host subcommand", () => {
+  assert.equal(launcherFor("linux", "/usr/bin/node", "/opt/m/cli.js", "cli").content, `#!/bin/sh\nexec '/usr/bin/node' '/opt/m/cli.js' "$@"\n`);
+  assert.equal(launcherFor("win32", "C:\\node.exe", "C:\\m\\cli.js", "cli").fileName, "markspot.bat");
+});
+
 test("sh launcher: spaces, dollar and apostrophe stay literal", () => {
   const sh = launcherFor("darwin", "/opt/my node/bin/node", "/Users/l'ada/$HOME/cli.js");
   assert.equal(sh.content, `#!/bin/sh\nexec '/opt/my node/bin/node' '/Users/l'\\''ada/$HOME/cli.js' host "$@"\n`);

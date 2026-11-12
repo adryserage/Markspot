@@ -20,12 +20,17 @@ Les notes viennent de l'extension Markspot : sur une page, la personne appuie su
 
 ## Mode écoute
 
-Quand la personne dit « écoute mes annotations » (ou « reste à l'écoute ») :
+Quand la personne dit « écoute mes annotations » (ou « reste à l'écoute »), elle enverra ses notes avec le bouton « Envoyer à Claude » de l'extension.
 
-1. Appelle `markspot_wait_for_annotations` sans `after_seq` : il rend tout de suite les notes déjà ouvertes, sinon il attend la prochaine. Il rend la main après `timeout_seconds` sans note.
-2. Règle chaque note rendue (étapes 2.1 à 2.5 ci-dessus). Une note que tu ne peux pas régler reste ouverte : dis pourquoi.
-3. Rappelle l'outil avec `after_seq` égal au `last_seq` de la réponse précédente : aucune note n'est manquée ni traitée deux fois. Si `more` vaut vrai, rappelle-le tout de suite.
-4. Continue jusqu'à ce que la personne dise d'arrêter. Après une heure sans note, demande si elle veut continuer.
+1. Règle d'abord les notes déjà ouvertes, comme ci-dessus.
+2. Lance la commande d'écoute en tâche de fond (outil Bash avec `run_in_background`) : `~/.local/share/markspot/bin/markspot listen` sous Linux, `~/Library/Application Support/markspot/bin/markspot listen` sous macOS, `%LOCALAPPDATA%\markspot\bin\markspot.bat listen` sous Windows. Les instructions du serveur MCP `markspot` donnent le chemin exact. Ajoute `--url <adresse>` pour n'écouter qu'un site. L'attente ne coûte rien : tu es réveillé seulement quand la commande se termine.
+3. À la notification de fin :
+   - code 0 : la sortie liste les notes envoyées. Relance d'abord l'écoute (étape 2), puis règle chaque note (étapes 2.1 à 2.5 ci-dessus) ;
+   - code 2 : une heure sans envoi. Relance l'écoute si la personne travaille encore, sinon arrête ;
+   - autre code : dis-le en une ligne et relance une fois.
+4. Arrête quand la personne dit « arrête d'écouter » : arrête la tâche de fond.
+
+Sans tâche de fond (autre client MCP), l'outil `markspot_wait_for_annotations` attend les nouvelles notes, mais chaque relance coûte un tour : préfère la commande.
 
 ## Règles
 

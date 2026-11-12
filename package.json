@@ -24,7 +24,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/",
-    "smoke": "node tests/smoke-mcp.ts",
+    "smoke": "node tests/smoke-mcp.ts && node tests/smoke-listen.ts",
     "e2e": "node tests/e2e/annotate.e2e.ts"
   },
   "devDependencies": {
