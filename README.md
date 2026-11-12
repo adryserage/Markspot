@@ -6,7 +6,23 @@ Tout reste sur ton poste : aucune donnée envoyée ailleurs, aucune télémétri
 
 ## État
 
-Version 0.1, en construction. Ce qui marche aujourd'hui : l'installation et le lien entre l'extension Chrome et le programme local (`markspot doctor` le vérifie). Le mode annotation, le serveur MCP et le skill arrivent ensuite.
+Version 0.1, en construction. Ce qui marche aujourd'hui :
+
+- le mode annotation dans Chrome : Alt+C, surbrillance, clic sur un élément ou zone tracée, commentaire avec la vignette de la capture, pastilles numérotées ;
+- l'installation et le lien entre l'extension et le programme local (`markspot doctor` le vérifie).
+
+Les notes restent pour l'instant dans le navigateur. Le stockage en fichiers, le serveur MCP et le skill arrivent ensuite.
+
+## Essayer l'annotation seule
+
+Cette version n’a besoin ni du programme local ni de Claude Code. Elle ne dépend pas du système d’exploitation.
+
+```sh
+npm install
+node build.mjs --trial ./markspot-essai
+```
+
+Dans Chrome, ouvre `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `markspot-essai`. Sur une page, appuie sur Alt+C ou clique sur l'icône Markspot. Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
 
 ## Comment ça marche
 
