@@ -22,7 +22,7 @@ function idOrThrow(raw: string): AnnotationId {
 
 export function createServer(store: AgentStore, version: string, listenCommand?: string): McpServer {
   const instructions = listenCommand
-    ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
+    ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen --name <this project's folder name>\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
     : undefined;
   const server = new McpServer({ name: "markspot", version }, instructions ? { instructions } : {});
 

@@ -1,7 +1,7 @@
 // Point d'entrée du binaire `markspot`.
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
@@ -26,7 +26,7 @@ const USAGE = `markspot ${VERSION}
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
-  markspot listen [--url <prefix>] [--timeout <s>]
+  markspot listen [--name <projet>] [--url <prefix>] [--timeout <s>]
                                wait for notes sent with "Envoyer à Claude" (exit 0), or time out (exit 2)
   markspot host <origin>       started by the browser, not by hand
 `;
@@ -95,11 +95,16 @@ async function main(argv: string[]): Promise<number> {
       return new Promise<number>(() => {}); // vit tant que Claude Code garde stdin ouvert
     }
     case "listen": {
-      const { values } = parseArgs({ args: rest, options: { url: { type: "string" }, timeout: { type: "string" } } });
+      const { values } = parseArgs({
+        args: rest,
+        options: { url: { type: "string" }, timeout: { type: "string" }, name: { type: "string" } },
+      });
       const { listen } = await import("./listen.ts");
       const timeout = Number(values.timeout ?? 3600);
       if (!Number.isFinite(timeout) || timeout < 5) throw new Error("--timeout must be a number of seconds, 5 or more");
-      return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout });
+      // Nom du projet montré dans la page : par défaut le dossier de la session.
+      const name = values.name ?? basename(process.cwd());
+      return listen({ urlPrefix: values.url ?? "", timeoutSeconds: timeout, name });
     }
     case "install":
     case "uninstall":

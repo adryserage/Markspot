@@ -110,14 +110,21 @@ class Overlay {
       sendToClaude: async (notes) => {
         const reply = await ask({ type: "send", ids: notes.map((n) => n.annotation.id) });
         if (!reply.ok) return { text: `Non envoyé : ${reply.error}`, error: true };
+        if (reply.type === "choose") {
+          return { text: "Plusieurs sessions écoutent : choisis-en une dans « Envoyer à », puis renvoie.", error: true, choose: true };
+        }
         if (reply.type !== "sent") return { text: "Non envoyé : réponse inattendue", error: true };
         const what = reply.count === 1 ? "1 note envoyée" : `${reply.count} notes envoyées`;
-        return reply.listeners > 0
-          ? { text: `${what} à Claude.`, error: false }
-          : {
-              text: `${what}. Aucune session n'écoute pour l'instant : dis « écoute mes annotations » dans Claude Code, elle les prendra.`,
-              error: false,
-            };
+        return reply.listening > 0
+          ? { text: `${what} à ${reply.to}.`, error: false }
+          : { text: `${what} à ${reply.to}, qui n'écoute pas en ce moment : la session les prendra dès qu'elle écoutera.`, error: false };
+      },
+      loadTargets: async () => {
+        const reply = await ask({ type: "targets" });
+        return reply.ok && reply.type === "targets" ? { listeners: reply.listeners, chosen: reply.chosen } : { listeners: [], chosen: null };
+      },
+      setTarget: async (name) => {
+        await ask({ type: "setTarget", name });
       },
       openExport: async () => {
         const reply = await ask({ type: "openExport" });

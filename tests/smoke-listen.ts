@@ -49,11 +49,16 @@ try {
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await store.create(note, { zone: png, context: png });
 
-  const listening = run(["listen", "--url", "http://localhost:3000", "--timeout", "30"], env);
+  // Deux projets écoutent : l'envoi visé « b » ne réveille que « b ».
+  const a = run(["listen", "--name", "a", "--timeout", "8"], env);
+  const listening = run(["listen", "--name", "b", "--url", "http://localhost:3000", "--timeout", "30"], env);
   await new Promise((r) => setTimeout(r, 1500));
-  const { listeners } = await store.send([note.id], "http://localhost:3000/prix");
-  assert.equal(listeners, 1, "the host should see one listening session");
+  const unchosen = await store.send([note.id], "http://localhost:3000/prix");
+  assert.equal(unchosen.kind, "choose", "two projects listen: the page must choose");
+  const sent = await store.send([note.id], "http://localhost:3000/prix", "b");
+  assert.deepEqual(sent, { kind: "sent", to: "b", listening: 1 });
   const got = await listening;
+  assert.equal((await a).code, 2, "project a never receives a dispatch aimed at b");
   assert.equal(got.code, 0, got.out);
   assert.match(got.out, /01JD8000000000000000000009/);
   assert.match(got.out, /Le bouton déborde/);

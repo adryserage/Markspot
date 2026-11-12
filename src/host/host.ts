@@ -146,10 +146,15 @@ async function handle(
         send({ type: "rejected", requestId: message.requestId, reason: "no open note" });
         return;
       }
-      const { listeners } = await store.send(open, message.url);
-      send({ type: "sent", requestId: message.requestId, listeners });
+      const outcome = await store.send(open, message.url, message.to);
+      if (outcome.kind === "sent") send({ type: "sent", requestId: message.requestId, to: outcome.to, listening: outcome.listening });
+      else if (outcome.kind === "choose") send({ type: "choose", requestId: message.requestId, listeners: outcome.listeners });
+      else send({ type: "rejected", requestId: message.requestId, reason: "nobody listens" });
       return;
     }
+    case "listeners":
+      send({ type: "listeners", requestId: message.requestId, listeners: await store.listeners(message.url) });
+      return;
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;

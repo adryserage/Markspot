@@ -6,17 +6,19 @@
 import { hostname } from "node:os";
 import { ulid } from "ulid";
 import { renderSummary, summary } from "../mcp/render.ts";
-import { beat, claimNext, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
+import { beat, claimNext, cleanName, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../store/store.ts";
 
 const BEAT_MS = 10_000;
 const SCAN_MS = 2_000;
 
-export async function listen(options: { urlPrefix: string; timeoutSeconds: number }): Promise<number> {
+export async function listen(options: { urlPrefix: string; timeoutSeconds: number; name: string }): Promise<number> {
   const config = await loadConfig();
   const store = await openAgentStore(config);
   const me: Listener = {
     id: ulid(),
+    name: cleanName(options.name),
+    cwd: process.cwd(),
     urlPrefix: options.urlPrefix,
     startedAt: new Date().toISOString(),
     pid: process.pid,

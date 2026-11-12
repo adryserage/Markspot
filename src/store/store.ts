@@ -34,6 +34,7 @@ import type {
 import { CAPTURE_KINDS, LOCAL_SCOPE, stateOf } from "../core/model.ts";
 import { currentPlatform, pathsFor } from "../core/paths.ts";
 import { AnnotationSchema, ResolutionSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
+import type { PublicListener } from "./dispatch.ts";
 
 export interface StoreConfig {
   dataDir: string;
@@ -93,11 +94,21 @@ export interface HostStore extends ThreadReader {
    * réponse l'a remplacée entre-temps, rien n'est retiré (changed).
    */
   reopen(id: AnnotationId, resolvedAt: string): Promise<ReopenOutcome>;
-  /** « Envoyer à Claude » : dépose un envoi pour la session qui écoute. Rend le nombre de sessions à l'écoute. */
-  send(ids: AnnotationId[], url: string): Promise<{ listeners: number }>;
+  /**
+   * « Envoyer à Claude » : dépose un envoi pour le projet `to`. Sans `to`, le seul projet
+   * qui écoute cette adresse ; s'il y en a plusieurs, ou aucun, rien n'est déposé.
+   */
+  send(ids: AnnotationId[], url: string, to?: string): Promise<SendOutcome>;
+  /** Les sessions qui écoutent cette adresse, pour le choix dans la page. */
+  listeners(url: string): Promise<PublicListener[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
 }
+
+export type SendOutcome =
+  | { kind: "sent"; to: string; listening: number }
+  | { kind: "choose"; listeners: PublicListener[] }
+  | { kind: "nobody" };
 
 export type ReopenOutcome =
   | { kind: "reopened"; thread: Thread }
@@ -387,12 +398,24 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
 
     resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
-    async send(ids, url) {
-      const { chooseListener, liveListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
+    async send(ids, url, to) {
+      const { cleanName, publicListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
       await purgeDispatch(config.dataDir);
-      await writeDispatch(config.dataDir, ids, url);
-      const listeners = (await liveListeners(config.dataDir)).filter((l) => chooseListener([l], url));
-      return { listeners: listeners.length };
+      const live = await publicListeners(config.dataDir, url);
+      let target = to ? cleanName(to) : "";
+      if (!target) {
+        const names = [...new Set(live.map((l) => l.name))];
+        if (names.length === 0) return { kind: "nobody" };
+        if (names.length > 1) return { kind: "choose", listeners: live };
+        target = names[0]!;
+      }
+      await writeDispatch(config.dataDir, ids, url, target);
+      return { kind: "sent", to: target, listening: live.filter((l) => l.name === target).length };
+    },
+
+    async listeners(url) {
+      const { publicListeners } = await import("./dispatch.ts");
+      return publicListeners(config.dataDir, url);
     },
 
     async reopen(id, resolvedAt) {
