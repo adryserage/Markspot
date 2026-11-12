@@ -6,7 +6,7 @@
 import { fromBase64 } from "../../../src/core/base64.ts";
 import { contains, visiblePart } from "../../../src/core/geometry.ts";
 import type { Annotation, Mark, PageRect, Rect, Viewport, ViewportRect } from "../../../src/core/model.ts";
-import { ask } from "../messages.ts";
+import { OVERLAY_PORT, ask, type NoteView, type OverlayPush } from "../messages.ts";
 import { describeElement } from "./anchor.ts";
 import css from "./overlay.css";
 
@@ -42,6 +42,10 @@ function currentViewport(): Viewport {
     scrollY,
   };
 }
+
+type NoteState = "pending" | "open" | "resolved";
+const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
+const stateClass = (note: NoteView): NoteState => (note.pending ? "pending" : note.resolution ? "resolved" : "open");
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -79,7 +83,8 @@ class Overlay {
   #panel: HTMLElement | null = null;
 
   #mode: Mode = "idle";
-  #annotations: Annotation[] = [];
+  #notes: NoteView[] = [];
+  #port: chrome.runtime.Port | null = null;
   #target: Element | null = null;
   #dragStart: { x: number; y: number } | null = null;
   #dragging = false;
@@ -130,6 +135,7 @@ class Overlay {
 
   async toggle(): Promise<void> {
     if (this.#mode === "idle") {
+      this.#listen();
       await this.#refresh();
       this.#startPicking();
     } else {
@@ -330,10 +336,9 @@ class Overlay {
         return;
       }
       this.#draftId = null;
-      this.#annotations.push(reply.annotation);
-      this.#renderPins();
+      this.#upsert(reply.note);
       this.#startPicking();
-      this.#showBar(`Note ${reply.annotation.seq} enregistrée. Clique ailleurs pour en ajouter une.`, true);
+      this.#showBar(`Note ${reply.note.annotation.seq} enregistrée. Clique ailleurs pour en ajouter une.`, true);
     };
     panel.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -395,8 +400,8 @@ class Overlay {
 
   async #refresh(): Promise<void> {
     const reply = await ask({ type: "list", url: location.href });
-    if (reply.ok && reply.type === "annotations") {
-      this.#annotations = reply.annotations;
+    if (reply.ok && reply.type === "notes") {
+      this.#notes = reply.notes;
       this.#renderPins();
     }
   }
@@ -417,16 +422,41 @@ class Overlay {
     return { x: rect.x - scrollX, y: rect.y - scrollY };
   }
 
+  /** Le service worker pousse les notes réglées ou retirées pendant que la page est ouverte. */
+  #listen(): void {
+    if (this.#port) return;
+    const port = chrome.runtime.connect({ name: OVERLAY_PORT });
+    this.#port = port;
+    port.onMessage.addListener((push: OverlayPush) => {
+      if (push.type === "note") this.#upsert(push.note);
+      else {
+        this.#notes = this.#notes.filter((n) => n.annotation.id !== push.id);
+        this.#renderPins();
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      this.#port = null;
+    });
+  }
+
+  #upsert(note: NoteView): void {
+    this.#notes = [...this.#notes.filter((n) => n.annotation.id !== note.annotation.id), note].sort(
+      (a, b) => a.annotation.seq - b.annotation.seq,
+    );
+    this.#renderPins();
+  }
+
   #renderPins(): void {
     this.#pins.replaceChildren(
-      ...this.#annotations.map((annotation) => {
-        const pin = el("button", "pin", String(annotation.seq));
+      ...this.#notes.map((note) => {
+        const { annotation } = note;
+        const pin = el("button", `pin ${stateClass(note)}`, String(annotation.seq));
         pin.type = "button";
-        pin.setAttribute("aria-label", `Note ${annotation.seq} : ${annotation.comment.slice(0, 60)}`);
+        pin.setAttribute("aria-label", `Note ${annotation.seq}, ${STATE_LABEL[stateClass(note)]} : ${annotation.comment.slice(0, 60)}`);
         const { x, y } = this.#pinPosition(annotation);
         pin.style.left = `${x}px`;
         pin.style.top = `${y}px`;
-        pin.addEventListener("click", () => void this.#openCard(annotation, pin));
+        pin.addEventListener("click", () => void this.#openCard(note, pin));
         return pin;
       }),
     );
@@ -440,13 +470,17 @@ class Overlay {
     });
   }
 
-  async #openCard(annotation: Annotation, pin: HTMLElement): Promise<void> {
+  async #openCard(note: NoteView, pin: HTMLElement): Promise<void> {
+    const { annotation, resolution } = note;
     const panel = el("div", "panel card");
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", `Note ${annotation.seq}`);
     const head = el("div", "card-head");
-    head.append(el("strong", "", `Note ${annotation.seq}`), el("span", "state open", "Ouverte"));
+    const state = stateClass(note);
+    head.append(el("strong", "", `Note ${annotation.seq}`), el("span", `state ${state}`, STATE_LABEL[state]));
     const comment = el("p", "card-comment", annotation.comment);
+    const answer = resolution ? el("div", "card-reply") : null;
+    if (answer && resolution) answer.append(el("strong", "", "Réponse de Claude"), el("p", "", resolution.reply));
     const preview = el("canvas", "preview");
     const { anchor } = annotation.mark;
     const target = el("p", "card-target");
@@ -459,7 +493,7 @@ class Overlay {
     close.addEventListener("click", () => this.#closePanel());
     const actions = el("div", "actions");
     actions.append(close);
-    panel.append(head, comment, preview, target, actions);
+    panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
     this.#openPanel(panel, toRect(pin.getBoundingClientRect()));
     close.focus();
 

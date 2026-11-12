@@ -262,3 +262,44 @@ button:focus-visible,
   background: var(--marker);
   color: var(--ink);
 }
+
+/* État des notes : en attente (pas encore écrite par l'hôte), ouverte, réglée par Claude. */
+.pin.pending {
+  background: var(--paper);
+  border-style: dashed;
+}
+
+.pin.resolved {
+  background: var(--done);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.state.pending {
+  border: 1px dashed var(--ink);
+  color: var(--ink);
+}
+
+.state.resolved {
+  background: var(--done);
+  color: var(--paper);
+}
+
+.card-reply {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eaf5ef;
+}
+
+.card-reply strong {
+  display: block;
+  font-size: 13px;
+  color: var(--done);
+}
+
+.card-reply p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

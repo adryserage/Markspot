@@ -1,5 +1,6 @@
-// Stockage de la version d'essai, dans chrome.storage.local. Il sera remplacé par
-// l'hôte natif (MARK-5) : même forme d'Annotation, mêmes PNG.
+// File d'envoi de l'extension, dans chrome.storage.local. Une note y attend jusqu'à ce que
+// l'hôte natif l'écrive en fichiers (il en devient alors le seul propriétaire). Sans hôte
+// (version d'essai, hôte pas encore installé), les notes y restent et s'exportent.
 //
 // Clés : ann:<id> -> Annotation ; png:<id>:<kind> -> PNG en base64 ;
 //        draft:<id> -> captures en attente du commentaire (le worker peut s'arrêter entre-temps).
@@ -20,7 +21,7 @@ const ANN = "ann:";
 const DRAFT = "draft:";
 const pngKey = (id: string, kind: CaptureKind) => `png:${id}:${kind}`;
 
-async function allAnnotations(): Promise<Annotation[]> {
+export async function allAnnotations(): Promise<Annotation[]> {
   const keys = (await chrome.storage.local.getKeys()).filter((k) => k.startsWith(ANN));
   if (keys.length === 0) return [];
   const items = await chrome.storage.local.get(keys);
@@ -79,6 +80,20 @@ export async function exportAll(now: Date): Promise<ExportFile> {
   const keys = annotations.flatMap((a) => CAPTURE_KINDS.map((kind) => pngKey(a.id, kind)));
   const pngs = keys.length > 0 ? ((await chrome.storage.local.get(keys)) as Record<string, string>) : {};
   return buildExport(annotations, (a, kind) => pngs[pngKey(a.id, kind)] ?? null, now);
+}
+
+/** Les deux images d'une note en file, ou null s'il en manque une. */
+export async function outboxPngs(id: AnnotationId): Promise<Record<CaptureKind, string> | null> {
+  const keys = CAPTURE_KINDS.map((kind) => pngKey(id, kind));
+  const items = (await chrome.storage.local.get(keys)) as Record<string, string | undefined>;
+  const zone = items[pngKey(id, "zone")];
+  const context = items[pngKey(id, "context")];
+  return zone && context ? { zone, context } : null;
+}
+
+/** Retire une note de la file une fois que l'hôte l'a écrite. */
+export async function removeFromOutbox(id: AnnotationId): Promise<void> {
+  await chrome.storage.local.remove([ANN + id, ...CAPTURE_KINDS.map((kind) => pngKey(id, kind))]);
 }
 
 export async function capturePng(id: AnnotationId, kind: CaptureKind): Promise<string | null> {

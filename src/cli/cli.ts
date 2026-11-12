@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
 import { runHost } from "../host/host.ts";
+import { loadConfig, openHostStore } from "../store/store.ts";
 import { DEFAULT_SETTINGS, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
 
 const USAGE = `markspot ${VERSION}
@@ -40,6 +41,7 @@ async function main(argv: string[]): Promise<number> {
         version: VERSION,
         input: process.stdin,
         output: process.stdout,
+        openStore: async () => openHostStore(await loadConfig()),
       });
     case "install":
     case "uninstall":
