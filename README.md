@@ -100,7 +100,7 @@ Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche
 
 Le message poussé dans la session contient seulement le numéro, l'identifiant et le commentaire de chaque note. Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
 
-Claude Code ne confirme pas la réception. Si la session n'a pas ouvert le canal (avertissement refusé, canaux désactivés par l'administrateur), l'envoi se perd et les notes restent ouvertes dans la page : renvoie-les après avoir dit « écoute mes annotations » à la session.
+Claude Code ne confirme pas la réception : l'envoi reste donc en attente jusqu'à ce que Claude ouvre une des notes. Si rien ne se passe pendant 2 minutes (avertissement refusé, canaux désactivés par l'administrateur), l'envoi revient dans la file et la session disparaît de « Envoyer à » jusqu'à son prochain appel d'outil. Dis alors « écoute mes annotations » à la session : `markspot listen` prendra l'envoi.
 
 ## Deux postes, un seul dossier de notes
 

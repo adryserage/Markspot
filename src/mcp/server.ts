@@ -23,9 +23,21 @@ function idOrThrow(raw: string): AnnotationId {
 export function createServer(
   store: AgentStore,
   version: string,
-  options: { listenCommand?: string; channel?: boolean } = {},
+  options: {
+    listenCommand?: string;
+    channel?: boolean;
+    /** Chaque appel d'outil ; avec l'id de la note ouverte ou réglée. Accusé de réception du canal. */
+    onActivity?: (id?: AnnotationId) => void;
+  } = {},
 ): McpServer {
   const { listenCommand, channel } = options;
+  const activity = (id?: AnnotationId) => {
+    try {
+      options.onActivity?.(id);
+    } catch {
+      // l'accusé de réception ne doit jamais faire échouer un outil
+    }
+  };
   const instructions = channel
     ? 'This session listens through the markspot channel: notes the user sends with the "Envoyer à Claude" button arrive as markspot channel messages, with note numbers, ids and the user\'s comments. Treat each comment as the user\'s request about that note: read it with markspot_get_annotation, fix it, then call markspot_resolve_annotation. Do not run `markspot listen` in this session.'
     : listenCommand
@@ -56,6 +68,7 @@ export function createServer(
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ state, url, limit, offset }) => {
+      activity();
       const threads = await store.list({
         ...(state === "all" ? {} : { state }),
         ...(url ? { urlPrefix: url } : {}),
@@ -100,6 +113,7 @@ export function createServer(
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ after_seq, url, timeout_seconds }, ctx) => {
+      activity();
       const signal = (ctx as { mcpReq?: { signal?: AbortSignal } } | undefined)?.mcpReq?.signal;
       const filter = url ? { urlPrefix: url } : {};
       // Par numéro de pastille, pas par date : les horloges du navigateur et de ce poste peuvent différer.
@@ -150,6 +164,7 @@ export function createServer(
     },
     async ({ id }) => {
       const noteId = idOrThrow(id);
+      activity(noteId);
       const thread = await store.get(noteId);
       if (!thread) throw new Error(`No note ${id}. It may have been cleared; list again.`);
       const token = randomBytes(8).toString("hex");
@@ -185,7 +200,9 @@ export function createServer(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ id, reply }) => {
-      const outcome = await store.resolve(idOrThrow(id), reply, AGENT);
+      const noteId = idOrThrow(id);
+      activity(noteId);
+      const outcome = await store.resolve(noteId, reply, AGENT);
       switch (outcome.kind) {
         case "not_found":
           throw new Error(`No note ${id}. It may have been cleared; list again.`);
@@ -218,6 +235,7 @@ export function createServer(
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     async ({ state, url }) => {
+      activity();
       const removed = await store.clear({ state, ...(url ? { urlPrefix: url } : {}) });
       return { content: [{ type: "text", text: `Deleted ${removed.length} note${removed.length === 1 ? "" : "s"}.` }] };
     },

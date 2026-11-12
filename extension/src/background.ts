@@ -17,6 +17,7 @@ import {
   type Thread,
 } from "../../src/core/model.ts";
 import { sanitizeStrokes } from "../../src/core/drawing.ts";
+import type { SendTarget } from "../../src/core/protocol.ts";
 import { burnStrokes, captureTab } from "./capture.ts";
 import { createHostLink } from "./link.ts";
 import {
@@ -170,14 +171,22 @@ async function notesForPage(url: string): Promise<NoteView[]> {
 /** Le projet qui reçoit les envois d'un site, gardé par origine (jamais une valeur venue de la page). */
 const targetKey = (url: string) => `target:${new URL(url).origin}`;
 
-async function chosenTarget(url: string): Promise<string | null> {
+/** Le choix gardé : { name, host }, ou une simple chaîne (nom seul) avant le choix par poste. */
+async function chosenTarget(url: string): Promise<SendTarget | null> {
   const key = targetKey(url);
-  return ((await chrome.storage.local.get(key))[key] as string | undefined) ?? null;
+  const saved: unknown = (await chrome.storage.local.get(key))[key];
+  if (typeof saved === "string" && saved) return { name: saved.slice(0, 80) };
+  if (!saved || typeof saved !== "object") return null;
+  const { name, host } = saved as { name?: unknown; host?: unknown };
+  if (typeof name !== "string" || !name) return null;
+  return { name: name.slice(0, 80), ...(typeof host === "string" && host ? { host: host.slice(0, 80) } : {}) };
 }
 
-async function saveTarget(url: string, name: string | null): Promise<void> {
-  if (name) await chrome.storage.local.set({ [targetKey(url)]: name.slice(0, 80) });
-  else await chrome.storage.local.remove(targetKey(url));
+async function saveTarget(url: string, target: SendTarget | null): Promise<void> {
+  if (target?.name) {
+    const value = { name: target.name.slice(0, 80), ...(target.host ? { host: target.host.slice(0, 80) } : {}) };
+    await chrome.storage.local.set({ [targetKey(url)]: value });
+  } else await chrome.storage.local.remove(targetKey(url));
 }
 
 // ------------------------------------------------------------------ overlay
@@ -293,14 +302,19 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       });
       if (ids.length === 0) return { ok: false, error: "aucune note ouverte reçue par le programme local" };
       const to = await chosenTarget(sender.url);
-      const reply = await host.request({ type: "send", ids, url: sender.url, ...(to ? { to } : {}) });
+      const reply = await host.request({
+        type: "send",
+        ids,
+        url: sender.url,
+        ...(to ? { to: to.name, ...(to.host ? { host: to.host } : {}) } : {}),
+      });
       if (reply.type === "choose") return { ok: true, type: "choose", listeners: reply.listeners };
       if (reply.type === "rejected" && reply.reason === "nobody listens") {
         return { ok: false, error: "aucune session n'écoute : dis « écoute mes annotations » dans la session du projet, puis renvoie" };
       }
       if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local (mets-le à jour ?)" };
-      await saveTarget(sender.url, reply.to);
-      return { ok: true, type: "sent", count: ids.length, to: reply.to, listening: reply.listening };
+      await saveTarget(sender.url, { name: reply.to, ...(reply.host ? { host: reply.host } : {}) });
+      return { ok: true, type: "sent", count: ids.length, to: reply.to, ...(reply.host ? { host: reply.host } : {}), listening: reply.listening };
     }
     case "targets": {
       if (!__MARKSPOT_NATIVE__ || !sender.url) return { ok: true, type: "targets", listeners: [], chosen: null };
@@ -310,7 +324,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
     }
     case "setTarget":
       if (!sender.url) return { ok: false, error: "page inconnue" };
-      await saveTarget(sender.url, request.name);
+      await saveTarget(sender.url, request.target);
       return { ok: true, type: "done" };
     case "openExport":
       await openExportPage(sender.tab);
