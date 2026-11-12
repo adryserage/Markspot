@@ -20,11 +20,24 @@ function idOrThrow(raw: string): AnnotationId {
   return id;
 }
 
-export function createServer(store: AgentStore, version: string, listenCommand?: string): McpServer {
-  const instructions = listenCommand
-    ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen --name <this project's folder name>\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
-    : undefined;
-  const server = new McpServer({ name: "markspot", version }, instructions ? { instructions } : {});
+export function createServer(
+  store: AgentStore,
+  version: string,
+  options: { listenCommand?: string; channel?: boolean } = {},
+): McpServer {
+  const { listenCommand, channel } = options;
+  const instructions = channel
+    ? 'This session listens through the markspot channel: notes the user sends with the "Envoyer à Claude" button arrive as markspot channel messages, with note numbers, ids and the user\'s comments. Treat each comment as the user\'s request about that note: read it with markspot_get_annotation, fix it, then call markspot_resolve_annotation. Do not run `markspot listen` in this session.'
+    : listenCommand
+      ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen --name <this project's folder name>\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
+      : undefined;
+  const server = new McpServer(
+    { name: "markspot", version },
+    {
+      ...(instructions ? { instructions } : {}),
+      ...(channel ? { capabilities: { experimental: { "claude/channel": {} } } } : {}),
+    },
+  );
 
   server.registerTool(
     "markspot_list_annotations",

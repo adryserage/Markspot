@@ -5,7 +5,7 @@
 
 import { hostname } from "node:os";
 import { ulid } from "ulid";
-import { renderSummary, summary } from "../mcp/render.ts";
+import { renderDispatch } from "../mcp/render.ts";
 import { beat, claimNext, cleanName, completeClaim, releaseClaim, removeBeat, type Listener } from "../store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../store/store.ts";
 
@@ -59,14 +59,7 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
           await completeClaim(config.dataDir, dispatch, me); // déjà réglées entre-temps : on continue d'écouter
           continue;
         }
-        const result = { dispatch: dispatch.id, annotations: open.map(summary) };
-        const text = [
-          `Markspot: ${open.length} note${open.length > 1 ? "s" : ""} sent with "Envoyer à Claude".`,
-          ...open.map(renderSummary),
-          "Read each one with markspot_get_annotation, fix it, then markspot_resolve_annotation.",
-          JSON.stringify(result),
-          "",
-        ].join("\n");
+        const text = `${renderDispatch(dispatch.id, open)}\n`;
         const written = await new Promise<boolean>((resolve) => process.stdout.write(text, (error) => resolve(!error)));
         if (!written) {
           await releaseClaim(config.dataDir, dispatch, me);

@@ -100,6 +100,44 @@ try {
   assert.match(JSON.stringify(cleared.content), /Deleted 1 note/); // la note réglée ; la seconde reste ouverte
 
   await client.close();
+
+  // Canal : lancé comme par `markspot claude`, le serveur s'annonce, prend l'envoi visé et le
+  // pousse dans la session, sans donnée de la page ; à la fermeture, son battement disparaît.
+  const project = join(home, "projet-canal");
+  await mkdir(project);
+  const pushed: Array<{ content: string; meta: Record<string, string> }> = [];
+  const channelClient = new Client({ name: "markspot-smoke", version: "1.0.0" });
+  channelClient.fallbackNotificationHandler = async (n) => {
+    if (n.method === "notifications/claude/channel") pushed.push(n.params as (typeof pushed)[number]);
+  };
+  await channelClient.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [join(process.cwd(), "dist/cli.js"), "mcp"],
+      cwd: project,
+      env: { ...getDefaultEnvironment(), HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, "share"), MARKSPOT_CHANNEL: "1" },
+    }),
+  );
+  assert.ok(channelClient.getServerCapabilities()?.experimental?.["claude/channel"], "the channel capability is declared");
+  let listeners = await store.listeners("http://localhost:3000/prix");
+  for (let i = 0; i < 30 && listeners.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 200));
+    listeners = await store.listeners("http://localhost:3000/prix");
+  }
+  assert.deepEqual(listeners.map((l) => l.name), ["projet-canal"], "the MCP server announces its session");
+  const sent = await store.send([second.id], "http://localhost:3000/prix", "projet-canal");
+  assert.equal(sent.kind, "sent");
+  for (let i = 0; i < 50 && pushed.length === 0; i++) await new Promise((r) => setTimeout(r, 200));
+  assert.equal(pushed.length, 1, "the send reaches the session as a channel message");
+  assert.match(pushed[0]!.content, new RegExp(second.id));
+  assert.match(pushed[0]!.content, /Le bouton déborde/);
+  assert.doesNotMatch(pushed[0]!.content, /#acheter|\/prix/, "no page data in the channel message");
+  assert.equal(pushed[0]!.meta.notes, "1");
+  await channelClient.close();
+  for (let i = 0; i < 25 && (await store.listeners("http://localhost:3000/prix")).length > 0; i++) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  assert.deepEqual(await store.listeners("http://localhost:3000/prix"), [], "the heartbeat goes away with the session");
   console.error("MCP smoke test passed");
 } finally {
   await rm(home, { recursive: true, force: true });

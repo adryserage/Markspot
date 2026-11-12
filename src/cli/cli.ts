@@ -26,6 +26,8 @@ const USAGE = `markspot ${VERSION}
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
+  markspot claude [args…]      start Claude Code with the Markspot channel: "Envoyer à Claude"
+                               wakes the session up (research preview, asks for confirmation)
   markspot listen [--name <projet>] [--url <prefix>] [--timeout <s>]
                                wait for notes sent with "Envoyer à Claude" (exit 0), or time out (exit 2)
   markspot host <origin>       started by the browser, not by hand
@@ -85,14 +87,56 @@ async function main(argv: string[]): Promise<number> {
       });
     case "mcp": {
       // Import différé : l'hôte, lancé par le navigateur, ne charge pas le SDK MCP.
-      const [{ serveStdio }, { createServer }] = await Promise.all([
+      const [{ StdioServerTransport }, { createServer }, { startChannel }] = await Promise.all([
         import("@modelcontextprotocol/server/stdio"),
         import("../mcp/server.ts"),
+        import("../mcp/channel.ts"),
       ]);
-      const store = await openAgentStore(await loadConfig());
-      serveStdio(() => createServer(store, VERSION, CLI_LAUNCHER));
-      process.stderr.write(`markspot ${VERSION} MCP server on stdio\n`);
-      return new Promise<number>(() => {}); // vit tant que Claude Code garde stdin ouvert
+      const config = await loadConfig();
+      const store = await openAgentStore(config);
+      // Posé par `markspot claude`, qui lance Claude Code avec le drapeau des canaux.
+      const channel = process.env.MARKSPOT_CHANNEL === "1";
+      const server = createServer(store, VERSION, { listenCommand: CLI_LAUNCHER, channel });
+      // connect() et non serveStdio() : Claude Code n'accepte les canaux qu'avec l'ancienne
+      // ouverture du protocole, que serveStdio ne propose pas.
+      const transport = new StdioServerTransport();
+      await server.connect(transport);
+      const stopChannel = channel
+        ? startChannel({
+            dataDir: config.dataDir,
+            store,
+            name: basename(process.cwd()),
+            push: (content, meta) =>
+              server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }),
+          })
+        : async () => {};
+      process.stderr.write(`markspot ${VERSION} MCP server on stdio${channel ? ", channel on" : ""}\n`);
+      return new Promise<number>(() => {
+        // Sortie explicite : stdin et les minuteries ne doivent pas garder le processus en vie.
+        const close = () => void stopChannel().finally(() => process.exit(0));
+        transport.onclose = close; // Claude Code ferme stdin à la fin de la session
+        process.stdin.once("end", close);
+        process.once("SIGINT", close);
+        process.once("SIGTERM", close);
+      });
+    }
+    case "claude": {
+      // Lance Claude Code avec le canal Markspot : la session se réveille à « Envoyer à Claude ».
+      const { spawn } = await import("node:child_process");
+      const args = ["--dangerously-load-development-channels", "server:markspot", ...rest];
+      const windows = process.platform === "win32";
+      const child = spawn(windows ? ["claude", ...args.map((a) => `"${a.replaceAll('"', '\\"')}"`)].join(" ") : "claude", windows ? [] : args, {
+        stdio: "inherit",
+        shell: windows, // claude.cmd ou claude.exe : seul le shell trouve les deux
+        env: { ...process.env, MARKSPOT_CHANNEL: "1" },
+      });
+      return new Promise<number>((done) => {
+        child.on("error", (error) => {
+          process.stderr.write(`markspot: could not start claude (${error.message}). Is Claude Code installed and on PATH?\n`);
+          done(1);
+        });
+        child.on("exit", (code) => done(code ?? 1));
+      });
     }
     case "listen": {
       const { values } = parseArgs({

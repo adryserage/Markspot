@@ -30,6 +30,20 @@ export function renderSummary(thread: Thread): string {
   return `Note ${annotation.seq} (${annotation.id}), ${STATE_FR[stateOf(thread)]} : ${annotation.comment.replace(/\s+/g, " ").slice(0, 160)}`;
 }
 
+/**
+ * Texte d'un envoi « Envoyer à Claude », le même par `markspot listen` et par le canal.
+ * Numéro, identifiant et commentaire seulement : aucune donnée de la page.
+ */
+export function renderDispatch(dispatchId: string, threads: Thread[]): string {
+  const result = { dispatch: dispatchId, annotations: threads.map(summary) };
+  return [
+    `Markspot: ${threads.length} note${threads.length > 1 ? "s" : ""} sent with "Envoyer à Claude".`,
+    ...threads.map(renderSummary),
+    "Read each one with markspot_get_annotation, fix it, then markspot_resolve_annotation.",
+    JSON.stringify(result),
+  ].join("\n");
+}
+
 export function renderThread(thread: Thread, paths: RenderPaths, token: string): string {
   const { annotation, resolution } = thread;
   const { mark, viewport, page } = annotation;
