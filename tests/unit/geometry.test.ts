@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contains, contextSize, cropBox, visiblePart } from "../../src/core/geometry.ts";
+import { clampToViewport, contains, contextSize, cropBox, visiblePart } from "../../src/core/geometry.ts";
 import { pageKeyOf, redactUrl } from "../../src/core/model.ts";
 
 const viewport = { width: 1000, height: 800 };
@@ -37,6 +37,16 @@ test("visiblePart clips to the viewport and returns null when fully outside", ()
 test("contextSize caps the width at 1600 px and keeps the ratio", () => {
   assert.deepEqual(contextSize({ width: 3200, height: 1800 }), { width: 1600, height: 900, scale: 0.5 });
   assert.deepEqual(contextSize({ width: 1280, height: 720 }), { width: 1280, height: 720, scale: 1 });
+});
+
+test("clampToViewport keeps a dragged panel inside the window", () => {
+  const vp = { width: 1000, height: 800 };
+  const size = { width: 340, height: 300 };
+  assert.deepEqual(clampToViewport(-50, -20, size, vp), { x: 6, y: 6 });
+  assert.deepEqual(clampToViewport(900, 700, size, vp), { x: 654, y: 494 });
+  assert.deepEqual(clampToViewport(100, 100, size, vp), { x: 100, y: 100 });
+  // Panneau plus grand que la fenêtre : collé à la marge haut-gauche.
+  assert.deepEqual(clampToViewport(300, 300, { width: 1200, height: 900 }, vp), { x: 6, y: 6 });
 });
 
 test("contains", () => {
