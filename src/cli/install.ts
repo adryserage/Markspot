@@ -10,6 +10,7 @@ import { currentPlatform, pathsFor } from "../core/paths.ts";
 import { HOST_NAME } from "../core/protocol.ts";
 import { BROWSER_IDS, hostTargets, isBrowserId, type BrowserId } from "./browsers.ts";
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
+import { claudeCommand, realProbe } from "./claude-command.ts";
 import { launcherFor } from "./launcher.ts";
 
 export interface Settings {
@@ -244,8 +245,10 @@ function browserSteps(ctx: Context): InstallStep[] {
 
 /** Lance la CLI de Claude Code. ok=false si elle échoue ou n'est pas installée. */
 async function claude(args: string[]): Promise<{ ok: boolean; missing: boolean }> {
+  const command = claudeCommand(args, realProbe());
+  if (!command) return { ok: false, missing: true };
   try {
-    await run("claude", args, { timeout: 60_000, windowsHide: true, shell: process.platform === "win32" });
+    await run(command.file, command.args, { timeout: 60_000, windowsHide: true, windowsVerbatimArguments: command.verbatim });
     return { ok: true, missing: false };
   } catch (error) {
     return { ok: false, missing: (error as NodeJS.ErrnoException).code === "ENOENT" };
