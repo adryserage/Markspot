@@ -87,7 +87,7 @@ Dis « écoute mes annotations » à la session. Claude lance `markspot listen -
 
 ### Réveil automatique (aperçu de recherche)
 
-Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes. Plus besoin de `markspot listen`.
+Lance Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
 
 Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche. Pour un serveur qui n'est pas un plugin approuvé par Anthropic, Claude Code ne les ouvre qu'avec le drapeau `--dangerously-load-development-channels server:markspot`, que `markspot claude` ajoute pour toi :
 
@@ -96,7 +96,7 @@ Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche
 - la voie normale, `--channels`, n'accepte que les plugins approuvés par Anthropic. Markspot ne l'est pas, donc le mode écoute reste le mode par défaut ;
 - il faut une session interactive (pas `claude -p`) et une connexion claude.ai ou une clé de la Console ; dans une organisation Team ou Enterprise, un administrateur doit activer les canaux.
 
-Le message poussé dans la session contient le numéro, l'identifiant et le commentaire de chaque note, rien d'autre : Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
+Le message poussé dans la session contient seulement le numéro, l'identifiant et le commentaire de chaque note. Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
 
 ## Deux postes, un seul dossier de notes
 
