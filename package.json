@@ -2,11 +2,11 @@
   "name": "markspot",
   "version": "0.1.0",
   "description": "Marque un endroit d'une page web et laisse une note : Claude Code la lit, corrige le code et répond sur la page.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adryserage/markspot.git"
+    "url": "git+https://github.com/adryserage/Markspot.git"
   },
   "bin": {
     "markspot": "dist/cli.js"

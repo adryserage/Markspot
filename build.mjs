@@ -61,6 +61,8 @@ for (const weight of [400, 700]) {
     join(dist, "fonts", `atkinson-${weight}.woff2`),
   );
 }
+// La licence SIL OFL demande que son texte accompagne chaque copie des polices.
+await copyFile("node_modules/@fontsource/atkinson-hyperlegible/LICENSE", join(dist, "fonts", "OFL.txt"));
 
 if (trial) {
   const trialManifest = {
