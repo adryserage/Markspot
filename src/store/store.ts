@@ -38,6 +38,8 @@ import { AnnotationSchema, ResolutionSchema, parseAnnotationId, scopeDir } from 
 export interface StoreConfig {
   dataDir: string;
   scope: ScopeId;
+  /** Pour les tests : remplace fs.link (un partage SMB vu de Windows peut le refuser). */
+  linkFile?: (existing: string, target: string) => Promise<void>;
 }
 
 /** Le dossier vient de config.json (clé dataDir) s'il est donné, sinon du système. */
@@ -206,14 +208,64 @@ async function reserveSeq(paths: Layout, id: AnnotationId): Promise<number> {
   }
 }
 
-/** Écrit la résolution d'une note par link exclusif : la première réponse gagne. */
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Large : l'horloge du serveur de partage peut différer de celle de ce poste. */
+const STALE_RESOLUTION_MS = 60_000;
+
+/**
+ * Rename avec trois essais : sous Windows, un fichier tenu (antivirus, indexation) rend
+ * EPERM, EBUSY ou EACCES pendant quelques instants.
+ */
+async function renameRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const transient = ["EPERM", "EBUSY", "EACCES"].includes(code(error) ?? "");
+      if (!transient || attempt >= 2) throw error;
+      await sleep(100 * (attempt + 1));
+    }
+  }
+}
+
+/**
+ * Un resolution.json illisible et ancien vient d'un arrêt pendant l'écriture de repli :
+ * on le retire, sinon plus personne ne pourrait régler la note.
+ */
+async function dropStaleResolution(file: string): Promise<void> {
+  let text: string;
+  let age: number;
+  try {
+    age = Date.now() - (await stat(file)).mtimeMs;
+    text = await readFile(file, "utf8");
+  } catch {
+    return; // absent, ou erreur passagère du partage : ne rien retirer
+  }
+  if (age < STALE_RESOLUTION_MS) return;
+  try {
+    JSON.parse(text);
+  } catch {
+    // Seul un fichier vide ou illisible et ancien est retiré.
+    await unlink(file).catch(() => undefined);
+  }
+}
+
+/**
+ * Écrit la résolution d'une note de façon exclusive : la première réponse gagne.
+ * D'abord par link (atomique, contenu complet). Si le système de fichiers le refuse
+ * (partage SMB vu de Windows), repli sur une création exclusive (wx).
+ */
 async function writeResolution(
   paths: Layout,
   read: ThreadReader,
   id: AnnotationId,
   reply: string,
   by: Author,
+  linkFile: (existing: string, target: string) => Promise<void>,
 ): Promise<ResolveOutcome> {
+  const target = join(paths.note(id), "resolution.json");
+  await dropStaleResolution(target);
   const thread = await read.get(id);
   if (!thread) return { kind: "not_found" };
   const decide = (t: Thread): ResolveOutcome =>
@@ -227,15 +279,36 @@ async function writeResolution(
     author: by,
     reply,
   };
+  const body = JSON.stringify(resolution, null, 2);
+  const lost = async (): Promise<ResolveOutcome> => {
+    // L'autre écrivain peut être en train d'écrire (repli wx) : relire un peu plus tard.
+    let now = await read.get(id);
+    if (now && !now.resolution) {
+      await sleep(200);
+      now = await read.get(id);
+    }
+    return now ? (now.resolution ? decide(now) : { kind: "already_resolved", thread: now }) : { kind: "not_found" };
+  };
   const tmp = join(paths.note(id), `.resolution.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
   try {
-    await writeFile(tmp, JSON.stringify(resolution, null, 2), { mode: FILE_MODE });
-    await link(tmp, join(paths.note(id), "resolution.json"));
+    await writeFile(tmp, body, { mode: FILE_MODE });
+    try {
+      await linkFile(tmp, target);
+    } catch (error) {
+      if (code(error) === "EEXIST") return await lost();
+      if (code(error) === "ENOENT") return { kind: "not_found" };
+      // link refusé (EPERM, ENOTSUP, EISDIR, UNKNOWN… selon le système) : création exclusive.
+      try {
+        await writeFile(target, body, { flag: "wx", mode: FILE_MODE });
+      } catch (fallback) {
+        if (code(fallback) === "EEXIST") return await lost();
+        if (code(fallback) === "ENOENT") return { kind: "not_found" };
+        throw fallback;
+      }
+    }
   } catch (error) {
     if (code(error) === "ENOENT") return { kind: "not_found" };
-    if (code(error) !== "EEXIST") throw error;
-    const now = await read.get(id);
-    return now ? decide(now) : { kind: "not_found" };
+    throw error;
   } finally {
     await unlink(tmp).catch(() => undefined);
   }
@@ -248,7 +321,7 @@ async function removeNote(paths: Layout, id: AnnotationId): Promise<boolean> {
   await mkdir(paths.trash, { recursive: true, mode: DIR_MODE });
   const trashed = join(paths.trash, `${id}-${randomBytes(4).toString("hex")}`);
   try {
-    await rename(paths.note(id), trashed);
+    await renameRetry(paths.note(id), trashed);
   } catch (error) {
     if (code(error) === "ENOENT") return false; // retirée par un autre processus
     throw error;
@@ -277,6 +350,7 @@ async function purgeStale(dir: string): Promise<void> {
 
 export async function openHostStore(config: StoreConfig): Promise<HostStore> {
   const paths = layout(config);
+  const linkFile = config.linkFile ?? link;
   await mkdir(paths.scope, { recursive: true, mode: DIR_MODE });
   await mkdir(paths.staging, { recursive: true, mode: DIR_MODE });
   await purgeStale(paths.staging);
@@ -296,17 +370,20 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       await writeFile(join(staging, "annotation.json"), JSON.stringify(annotation, null, 2), { mode: FILE_MODE });
       for (const kind of CAPTURE_KINDS) await writeFile(join(staging, `${kind}.png`), pngs[kind], { mode: FILE_MODE });
       try {
-        await rename(staging, paths.note(input.id));
+        await renameRetry(staging, paths.note(input.id));
       } catch (error) {
         await rm(staging, { recursive: true, force: true });
-        if (code(error) !== "EEXIST" && code(error) !== "ENOTEMPTY") throw error;
+        // Sous Windows, une cible déjà là rend EPERM : la note existe, c'est un rejeu.
+        if (!["EEXIST", "ENOTEMPTY", "EPERM", "EACCES"].includes(code(error) ?? "") || !(await read.get(input.id))) {
+          throw error;
+        }
       }
       const thread = await read.get(input.id);
       if (!thread) throw new Error(`note ${input.id} vanished after creation`);
       return thread;
     },
 
-    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by),
+    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
     async reopen(id, resolvedAt) {
       const thread = await read.get(id);
@@ -347,7 +424,7 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       const file = join(paths.note(id), "annotation.json");
       const tmp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
       await writeFile(tmp, JSON.stringify(next, null, 2), { mode: FILE_MODE });
-      await rename(tmp, file);
+      await renameRetry(tmp, file);
       const now = await read.get(id);
       return now ? { kind: "edited", thread: now } : { kind: "not_found" };
     },
@@ -388,6 +465,8 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       void rescan();
       // fs.watch n'est qu'un déclencheur : il peut manquer un événement, d'où la relecture régulière.
       const watcher = fsWatch(paths.scope, { recursive: true }, schedule);
+      // Partage réseau coupé : on garde la relecture régulière au lieu de faire tomber l'hôte.
+      watcher.on("error", () => undefined);
       const interval = setInterval(() => void rescan(), RESCAN_MS);
       return {
         close() {
@@ -402,11 +481,12 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
 
 export async function openAgentStore(config: StoreConfig): Promise<AgentStore> {
   const paths = layout(config);
+  const linkFile = config.linkFile ?? link;
   const read = reader(paths);
 
   return {
     ...read,
-    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by),
+    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
     async clear(filter) {
       const threads = await read.list({
