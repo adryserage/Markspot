@@ -412,7 +412,7 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       await purgeDispatch(config.dataDir);
       const live = await publicListeners(config.dataDir, url);
       let target = to ? cleanName(to) : "";
-      const onHost = host ? cleanName(host) : "";
+      let onHost = host ? cleanName(host) : "";
       if (!target) {
         // Une écoute = un projet sur un poste : le même dossier sous Linux et Windows fait deux choix.
         const pairs = new Set(live.map((l) => `${l.name}\n${l.host}`));
@@ -422,6 +422,9 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       } else if (!onHost && new Set(live.filter((l) => l.name === target).map((l) => l.host)).size > 1) {
         return { kind: "choose", listeners: live }; // ancien choix sans poste, et ce projet écoute sur deux postes
       }
+      // Un seul poste écoute ce projet : l'envoi le nomme, une copie ne peut pas réveiller l'autre poste.
+      const hosts = [...new Set(live.filter((l) => l.name === target).map((l) => l.host))];
+      if (!onHost && hosts.length === 1) onHost = hosts[0]!;
       // Le commentaire de chaque note est signé avec l'envoi : changé ensuite sur le partage, la note ne part pas.
       const hashes: string[] = [];
       for (const id of ids) hashes.push(commentHash((await read.get(id))?.annotation.comment ?? ""));
