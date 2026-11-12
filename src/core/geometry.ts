@@ -39,6 +39,19 @@ export function contextSize(image: { width: number; height: number }): { width: 
   return { width: Math.round(image.width * scale), height: Math.round(image.height * scale), scale };
 }
 
+/** Position d'un panneau de width×height gardée dans la fenêtre, avec une marge. */
+export function clampToViewport(
+  x: number,
+  y: number,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  margin = 6,
+): { x: number; y: number } {
+  const maxX = Math.max(margin, viewport.width - size.width - margin);
+  const maxY = Math.max(margin, viewport.height - size.height - margin);
+  return { x: Math.min(Math.max(margin, x), maxX), y: Math.min(Math.max(margin, y), maxY) };
+}
+
 /** Le plus petit rectangle qui contient les deux. */
 export function union(a: Rect, b: Rect): Rect {
   const x = Math.min(a.x, b.x);

@@ -516,3 +516,48 @@ button.danger:hover {
 .menu-confirm .actions {
   justify-content: flex-start;
 }
+
+/* Barre de prise des panneaux : glisser pour déplacer, double-clic pour remettre en place. */
+.panel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -12px -12px 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  background: #f3f4f7;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-bar.grabbing {
+  cursor: grabbing;
+}
+
+.panel-bar:focus-visible {
+  outline: 3px solid var(--marker);
+  outline-offset: -3px;
+}
+
+.panel-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Poignée : six points en deux colonnes, dessinés par dégradés. */
+.grip {
+  flex: none;
+  width: 14px;
+  height: 20px;
+  background-image: radial-gradient(circle, var(--muted) 1.6px, transparent 1.8px);
+  background-size: 7px 7px;
+  background-position: 0 0;
+  opacity: 0.8;
+}
+
+.card-head.panel-bar strong {
+  margin-right: auto;
+}
