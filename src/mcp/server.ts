@@ -1,0 +1,169 @@
+// Serveur MCP stdio, un par session Claude Code. Il lit le dossier des notes et n'écrit
+// que les résolutions : plusieurs sessions peuvent tourner en même temps.
+
+import { randomBytes } from "node:crypto";
+import { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod/v4";
+import { stateOf, type AnnotationId, type Thread } from "../core/model.ts";
+import { REPLY_MAX, parseAnnotationId } from "../core/schema.ts";
+import type { AgentStore } from "../store/store.ts";
+import { renderSummary, renderThread } from "./render.ts";
+
+const AGENT = { kind: "agent", id: "claude-code", name: "Claude" } as const;
+const CHARACTER_LIMIT = 25_000;
+/** Une image plus grosse n'est pas jointe : Claude reçoit son chemin à la place. */
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+
+function summary(thread: Thread) {
+  const { annotation } = thread;
+  return {
+    id: annotation.id,
+    seq: annotation.seq,
+    state: stateOf(thread),
+    url: annotation.page.url,
+    comment: annotation.comment,
+    element: { tag: annotation.mark.anchor.tag, selector: annotation.mark.anchor.selector, text: annotation.mark.anchor.text },
+    createdAt: annotation.createdAt,
+    reply: thread.resolution?.reply ?? null,
+  };
+}
+
+function idOrThrow(raw: string): AnnotationId {
+  const id = parseAnnotationId(raw);
+  if (!id) throw new Error(`Invalid id "${raw}". Use an id from markspot_list_annotations.`);
+  return id;
+}
+
+export function createServer(store: AgentStore, version: string): McpServer {
+  const server = new McpServer({ name: "markspot", version });
+
+  server.registerTool(
+    "markspot_list_annotations",
+    {
+      title: "List annotations",
+      description:
+        "List the visual notes the user left on web pages with the Markspot browser extension: id, pin number, " +
+        "state, page URL, comment and marked element. Call markspot_get_annotation for the screenshots and details.",
+      inputSchema: z.strictObject({
+        state: z.enum(["open", "resolved", "all"]).default("open").describe("open (default), resolved or all"),
+        url: z.string().optional().describe("Keep notes whose page URL starts with this, e.g. http://localhost:3000"),
+        limit: z.number().int().min(1).max(100).default(20),
+        offset: z.number().int().min(0).default(0),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ state, url, limit, offset }) => {
+      const threads = await store.list({
+        ...(state === "all" ? {} : { state }),
+        ...(url ? { urlPrefix: url } : {}),
+      });
+      let count = Math.min(limit, Math.max(0, threads.length - offset));
+      let page = threads.slice(offset, offset + count).map(summary);
+      const build = () => ({
+        total: threads.length,
+        count: page.length,
+        offset,
+        has_more: offset + page.length < threads.length,
+        ...(offset + page.length < threads.length ? { next_offset: offset + page.length } : {}),
+        annotations: page,
+      });
+      while (JSON.stringify(build()).length > CHARACTER_LIMIT && count > 1) {
+        count = Math.ceil(count / 2);
+        page = page.slice(0, count);
+      }
+      const result = build();
+      const text =
+        result.total === 0
+          ? "No notes match. The user creates them with Alt+C in the browser."
+          : `${threads.slice(offset, offset + page.length).map(renderSummary).join("\n")}\n\n${JSON.stringify(result)}`;
+      return { content: [{ type: "text", text }], structuredContent: result };
+    },
+  );
+
+  server.registerTool(
+    "markspot_get_annotation",
+    {
+      title: "Get annotation",
+      description:
+        "Full data of one note: the user's comment, the page URL, the marked element (selector, text, attributes, " +
+        "computed styles), and two images: a close-up of the marked zone and the whole screen with the zone framed.",
+      inputSchema: z.strictObject({ id: z.string().describe("Note id from markspot_list_annotations") }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const noteId = idOrThrow(id);
+      const thread = await store.get(noteId);
+      if (!thread) throw new Error(`No note ${id}. It may have been cleared; list again.`);
+      const token = randomBytes(8).toString("hex");
+      const text = renderThread(
+        thread,
+        { zone: store.capturePath(noteId, "zone"), context: store.capturePath(noteId, "context") },
+        token,
+      );
+      const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
+        { type: "text", text },
+      ];
+      for (const kind of ["zone", "context"] as const) {
+        const png = await store.capture(noteId, kind);
+        if (png && png.length <= MAX_IMAGE_BYTES) {
+          content.push({ type: "image", data: Buffer.from(png).toString("base64"), mimeType: "image/png" });
+        }
+      }
+      return { content };
+    },
+  );
+
+  server.registerTool(
+    "markspot_resolve_annotation",
+    {
+      title: "Resolve annotation",
+      description:
+        "Mark a note resolved and attach the reply the user reads on the page. Call it after the fix is verified " +
+        "in the browser. The first reply wins: calling again with the same reply changes nothing.",
+      inputSchema: z.strictObject({
+        id: z.string(),
+        reply: z.string().min(1).max(REPLY_MAX).describe("What was changed, in the user's language, one or two sentences"),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id, reply }) => {
+      const outcome = await store.resolve(idOrThrow(id), reply, AGENT);
+      switch (outcome.kind) {
+        case "not_found":
+          throw new Error(`No note ${id}. It may have been cleared; list again.`);
+        case "already_resolved":
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Note ${outcome.thread.annotation.seq} was already resolved by another session with: ${outcome.thread.resolution?.reply ?? ""}`,
+              },
+            ],
+          };
+        default:
+          return { content: [{ type: "text", text: `Resolved note ${outcome.thread.annotation.seq} (${id}).` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "markspot_clear_annotations",
+    {
+      title: "Clear annotations",
+      description:
+        "Permanently delete notes and their screenshots. `state` is required: pass \"resolved\" to tidy up, " +
+        "\"all\" only when the user asked to delete open notes too.",
+      inputSchema: z.strictObject({
+        state: z.enum(["resolved", "open", "all"]),
+        url: z.string().optional().describe("Only notes whose page URL starts with this"),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ state, url }) => {
+      const removed = await store.clear({ state, ...(url ? { urlPrefix: url } : {}) });
+      return { content: [{ type: "text", text: `Deleted ${removed.length} note${removed.length === 1 ? "" : "s"}.` }] };
+    },
+  );
+
+  return server;
+}
