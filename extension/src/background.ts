@@ -366,7 +366,14 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "thumbnail", png: reply?.type === "capture" ? reply.png : null };
     }
     case "status":
-      return { ok: true, type: "status", native: __MARKSPOT_NATIVE__, connected: host.connected };
+      return {
+        ok: true,
+        type: "status",
+        native: __MARKSPOT_NATIVE__,
+        connected: host.connected,
+        // Message de Chrome quand aucun programme local n'est déclaré : pas un simple réveil lent.
+        missing: __MARKSPOT_NATIVE__ && /native messaging host not found/i.test(host.lastError ?? ""),
+      };
   }
 }
 

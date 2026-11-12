@@ -189,6 +189,7 @@ class Overlay {
       this.#listen();
       const status = await ask({ type: "status" });
       this.#menu.setCanSend(status.ok && status.type === "status" && status.native);
+      this.#menu.setHostMissing(status.ok && status.type === "status" && status.missing);
       await this.#refresh();
       this.#startPicking();
     } else {
