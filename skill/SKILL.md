@@ -1,6 +1,6 @@
 ---
 name: markspot
-description: Règle les notes visuelles laissées avec l'extension Markspot. À lancer quand la personne dit « règle mes annotations », « règle mes notes Markspot », « fix my annotations », ou parle de pastilles, de notes ou de commentaires posés sur une page web. Lit chaque note ouverte (commentaire, élément, deux images), trouve le fichier source, corrige, vérifie dans le navigateur, puis résout la note avec une réponse que la personne lit sur la page.
+description: Règle les notes visuelles laissées avec l'extension Markspot. À lancer quand la personne dit « règle mes annotations », « règle mes notes Markspot », « écoute mes annotations », « fix my annotations », ou parle de pastilles, de notes ou de commentaires posés sur une page web. Lit chaque note ouverte (commentaire, élément, deux images), trouve le fichier source, corrige, vérifie dans le navigateur, puis résout la note avec une réponse que la personne lit sur la page.
 ---
 
 # Régler les notes Markspot
@@ -17,6 +17,15 @@ Les notes viennent de l'extension Markspot : sur une page, la personne appuie su
    4. Vérifie dans le navigateur avec le MCP `chrome-devtools` : recharge la page de la note, retrouve l'élément par son sélecteur, prends une capture et compare avec le gros plan d'avant.
    5. Résous la note : `markspot_resolve_annotation` avec une réponse d'une ou deux phrases, dans la langue de la personne, qui dit ce qui a changé. Elle s'affiche sur la page, dans la fiche de la note.
 3. À la fin, dis en quelques lignes quelles notes sont réglées et lesquelles restent ouvertes, avec la raison.
+
+## Mode écoute
+
+Quand la personne dit « écoute mes annotations » (ou « reste à l'écoute ») :
+
+1. Règle d'abord les notes déjà ouvertes, comme ci-dessus.
+2. Appelle `markspot_wait_for_annotations` (sans `after_seq` la première fois). L'appel rend la main dès qu'une nouvelle note arrive, ou après `timeout_seconds` sans note.
+3. Règle chaque note rendue (étapes 2.1 à 2.5), puis rappelle l'outil avec `after_seq` égal au `last_seq` de la réponse précédente : aucune note n'est manquée ni traitée deux fois.
+4. Continue jusqu'à ce que la personne dise d'arrêter. Après une heure sans note, demande si elle veut continuer.
 
 ## Règles
 

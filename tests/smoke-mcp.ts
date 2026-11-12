@@ -57,6 +57,7 @@ try {
     "markspot_get_annotation",
     "markspot_list_annotations",
     "markspot_resolve_annotation",
+    "markspot_wait_for_annotations",
   ]);
   assert.equal(tools.find((t) => t.name === "markspot_clear_annotations")?.annotations?.destructiveHint, true);
 
@@ -77,13 +78,26 @@ try {
   const again = await client.callTool({ name: "markspot_resolve_annotation", arguments: { id: note.id, reply: "Corrigé." } });
   assert.match(JSON.stringify(again.content), /Resolved note 1/);
 
+  // Mode écoute : une note créée pendant l'attente réveille l'appel.
+  const second = { ...note, id: "01JD8000000000000000000002" } as typeof note;
+  const waiting = client.callTool({ name: "markspot_wait_for_annotations", arguments: { timeout_seconds: 20 } });
+  setTimeout(() => void store.create(second, { zone: png, context: png }), 1000);
+  const woke = await waiting;
+  const wokeData = woke.structuredContent as { last_seq: number; annotations: Array<{ id: string }> };
+  assert.deepEqual(wokeData.annotations.map((a) => a.id), [second.id]);
+  const quiet = await client.callTool({
+    name: "markspot_wait_for_annotations",
+    arguments: { after_seq: wokeData.last_seq, timeout_seconds: 5 },
+  });
+  assert.deepEqual((quiet.structuredContent as { annotations: unknown[] }).annotations, []);
+
   const noState = await client.callTool({ name: "markspot_clear_annotations", arguments: {} });
   assert.equal(noState.isError, true, "clear without state must be refused");
   const badId = await client.callTool({ name: "markspot_get_annotation", arguments: { id: "../etc" } });
   assert.equal(badId.isError, true);
 
   const cleared = await client.callTool({ name: "markspot_clear_annotations", arguments: { state: "resolved" } });
-  assert.match(JSON.stringify(cleared.content), /Deleted 1 note/);
+  assert.match(JSON.stringify(cleared.content), /Deleted 1 note/); // la note réglée ; la seconde reste ouverte
 
   await client.close();
   console.error("MCP smoke test passed");
