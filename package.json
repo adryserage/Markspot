@@ -1,0 +1,38 @@
+{
+  "name": "markspot",
+  "version": "0.1.0",
+  "description": "Marque un endroit d'une page web et laisse une note : Claude Code la lit, corrige le code et répond sur la page.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adryserage/markspot.git"
+  },
+  "bin": {
+    "markspot": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "extension/manifest.json",
+    "extension/dist/",
+    "skill/"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/unit/"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@types/chrome": "0.3.7",
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.65.0",
+    "typescript": "7.0.2",
+    "ulid": "3.0.2",
+    "zod": "4.6.7"
+  }
+}
