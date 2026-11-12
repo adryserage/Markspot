@@ -62,7 +62,11 @@ export type OverlayReply =
   | { ok: false; error: string };
 
 /** Poussé par le service worker sur le port « overlay » ouvert par la page. */
-export type OverlayPush = { type: "note"; note: NoteView } | { type: "removed"; id: AnnotationId };
+export type OverlayPush =
+  | { type: "note"; note: NoteView }
+  | { type: "removed"; id: AnnotationId }
+  /** Un message pour la personne, montré dans le menu des notes. */
+  | { type: "notice"; text: string };
 
 export const OVERLAY_PORT = "markspot-overlay";
 
