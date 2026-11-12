@@ -671,3 +671,27 @@ button.danger:hover {
   outline: 3px solid var(--marker);
   outline-offset: 1px;
 }
+
+/* Programme local absent : comment l'installer. */
+.menu-install {
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.menu-install p {
+  margin: 6px 0;
+}
+
+.menu-install code {
+  display: block;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--paper);
+  font: 13px/1.4 ui-monospace, monospace;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
