@@ -3,6 +3,7 @@
 // Lancer : npm run build && node tests/smoke-mcp.ts
 
 import { strict as assert } from "node:assert";
+import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,8 +20,11 @@ try {
   const configDir = join(home, ".config", "markspot");
   await mkdir(configDir, { recursive: true });
   await writeFile(join(configDir, "config.json"), JSON.stringify({ dataDir }));
+  // La clé d'envoi du poste factice : le processus lancé la lit, le store de l'essai aussi.
+  const dispatchKey = randomBytes(32);
+  await writeFile(join(configDir, "dispatch.key"), dispatchKey.toString("base64"));
 
-  const store = await openHostStore({ dataDir, scope: LOCAL_SCOPE });
+  const store = await openHostStore({ dataDir, scope: LOCAL_SCOPE, dispatchKey });
   const rect = { x: 1, y: 2, width: 3, height: 4 };
   const note = NewAnnotationSchema.parse({
     id: "01JD8000000000000000000001",

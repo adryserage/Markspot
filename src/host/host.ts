@@ -157,6 +157,7 @@ async function handle(
         });
       }
       else if (outcome.kind === "choose") send({ type: "choose", requestId: message.requestId, listeners: outcome.listeners });
+      else if (outcome.kind === "nokey") send({ type: "rejected", requestId: message.requestId, reason: "no dispatch key" });
       else send({ type: "rejected", requestId: message.requestId, reason: "nobody listens" });
       return;
     }

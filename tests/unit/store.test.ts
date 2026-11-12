@@ -15,7 +15,7 @@ after(async () => {
 async function config(): Promise<StoreConfig> {
   const dir = await mkdtemp(join(tmpdir(), "markspot-store-"));
   dirs.push(dir);
-  return { dataDir: dir, scope: LOCAL_SCOPE };
+  return { dataDir: dir, scope: LOCAL_SCOPE, dispatchKey: Buffer.alloc(32, 7) };
 }
 
 let counter = 0;

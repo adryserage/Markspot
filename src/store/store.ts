@@ -41,6 +41,8 @@ export interface StoreConfig {
   scope: ScopeId;
   /** Pour les tests : remplace fs.link (un partage SMB vu de Windows peut le refuser). */
   linkFile?: (existing: string, target: string) => Promise<void>;
+  /** Clé qui signe et vérifie les envois ; null : aucun envoi n'est écrit ni pris. */
+  dispatchKey?: Buffer | null;
 }
 
 /** Le dossier vient de config.json (clé dataDir) s'il est donné, sinon du système. */
@@ -53,7 +55,8 @@ export async function loadConfig(): Promise<StoreConfig> {
   } catch {
     // pas de réglage : dossier par défaut
   }
-  return { dataDir, scope: LOCAL_SCOPE };
+  const { readDispatchKey } = await import("./dispatch.ts");
+  return { dataDir, scope: LOCAL_SCOPE, dispatchKey: await readDispatchKey(paths.keyFile) };
 }
 
 export interface ThreadFilter {
@@ -108,7 +111,9 @@ export interface HostStore extends ThreadReader {
 export type SendOutcome =
   | { kind: "sent"; to: string; host?: string; listening: number }
   | { kind: "choose"; listeners: PublicListener[] }
-  | { kind: "nobody" };
+  | { kind: "nobody" }
+  /** Pas de clé sur ce poste : markspot install la crée. */
+  | { kind: "nokey" };
 
 export type ReopenOutcome =
   | { kind: "reopened"; thread: Thread }
@@ -127,8 +132,8 @@ export interface AgentStore extends ThreadReader {
   clear(filter: { state: ThreadState | "all"; urlPrefix?: string }): Promise<AnnotationId[]>;
 }
 
-const FILE_MODE = 0o600;
-const DIR_MODE = 0o700;
+export const FILE_MODE = 0o600;
+export const DIR_MODE = 0o700;
 const STALE_STAGING_MS = 60 * 60 * 1000;
 const RESCAN_MS = 5_000;
 
@@ -399,7 +404,9 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
     resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
     async send(ids, url, to, host) {
-      const { cleanName, publicListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
+      const { cleanName, commentHash, publicListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
+      const key = config.dispatchKey;
+      if (!key) return { kind: "nokey" };
       await purgeDispatch(config.dataDir);
       const live = await publicListeners(config.dataDir, url);
       let target = to ? cleanName(to) : "";
@@ -413,7 +420,10 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       } else if (!onHost && new Set(live.filter((l) => l.name === target).map((l) => l.host)).size > 1) {
         return { kind: "choose", listeners: live }; // ancien choix sans poste, et ce projet écoute sur deux postes
       }
-      await writeDispatch(config.dataDir, ids, url, target, onHost || undefined);
+      // Le commentaire de chaque note est signé avec l'envoi : changé ensuite sur le partage, la note ne part pas.
+      const hashes: string[] = [];
+      for (const id of ids) hashes.push(commentHash((await read.get(id))?.annotation.comment ?? ""));
+      await writeDispatch(config.dataDir, key, { ids, url, to: target, ...(onHost ? { toHost: onHost } : {}), hashes });
       const listening = live.filter((l) => l.name === target && (!onHost || l.host === onHost)).length;
       return { kind: "sent", to: target, ...(onHost ? { host: onHost } : {}), listening };
     },
