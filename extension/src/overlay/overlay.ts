@@ -101,7 +101,9 @@ class Overlay {
     this.#menu = new NotesMenu({
       goTo: (note) => void this.#goTo(note),
       edit: (note, comment) => this.#edit(note, comment),
-      clearResolved: (notes) => this.#clearResolved(notes),
+      clearResolved: (notes) => this.#clearNotes(notes, false),
+      clearAll: (notes) => this.#clearNotes(notes, true),
+      setResolved: (note, resolved) => this.#setResolved(note, resolved),
     });
     this.#menu.element.hidden = true;
     this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar, this.#menu.element);
@@ -308,24 +310,30 @@ class Overlay {
     }
     this.#draftId = reply.draftId;
     this.#bar.hidden = true;
-    this.#openComposer(mark, viewport, zone, reply.png);
+    await this.#openComposer(mark, viewport, zone, reply.png);
   }
 
-  #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): void {
-    const panel = el("form", "panel composer");
-    const preview = el("canvas", "preview");
-    void drawPng(preview, png, 316, 160);
+  /** La boîte s'ouvre directement sur la capture, prête pour le dessin. */
+  async #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): Promise<void> {
+    const panel = el("form", "panel composer wide");
     let pad: DrawingPad | null = null;
-    const draw = el("button", "ghost small draw", "Dessiner sur la capture");
-    draw.type = "button";
-    draw.addEventListener("click", async () => {
+    let capture: HTMLElement;
+    try {
       const bitmap = await createImageBitmap(new Blob([fromBase64(png)], { type: "image/png" }));
       pad = new DrawingPad(bitmap, Math.min(560, innerWidth - 60));
-      preview.replaceWith(pad.element);
-      draw.remove();
-      panel.classList.add("wide");
-      this.#placePanel(panel, zone);
-    });
+      capture = pad.element;
+    } catch {
+      // Image illisible : simple vignette, sans dessin.
+      const preview = el("canvas", "preview");
+      void drawPng(preview, png, 316, 160);
+      capture = preview;
+      panel.classList.remove("wide");
+    }
+    // Échap pendant le décodage : la personne est sortie.
+    if (this.#mode !== "composing") {
+      this.#discardDraft();
+      return;
+    }
     const field = el("textarea", "comment");
     field.placeholder = "Qu'est-ce qui ne va pas ici ?";
     field.rows = 3;
@@ -338,7 +346,7 @@ class Overlay {
     const save = el("button", "primary", "Enregistrer la note");
     save.type = "submit";
     actions.append(cancel, save);
-    panel.append(preview, draw, field, hint, actions);
+    panel.append(capture, field, hint, actions);
 
     const submit = async () => {
       const comment = field.value.trim();
@@ -510,11 +518,22 @@ class Overlay {
     return null;
   }
 
-  async #clearResolved(notes: NoteView[]): Promise<string | null> {
-    const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id) });
+  async #clearNotes(notes: NoteView[], includeOpen: boolean): Promise<string | null> {
+    const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id), includeOpen });
     if (!reply.ok) return reply.error;
     if (reply.type !== "cleared") return "réponse inattendue";
+    // Même en erreur, les notes déjà retirées disparaissent de la page.
     this.#remove(reply.ids);
+    return reply.error ? `${reply.ids.length} effacée(s), les autres restent : ${reply.error}` : null;
+  }
+
+  async #setResolved(note: NoteView, resolved: boolean): Promise<string | null> {
+    const reply = await ask(
+      resolved ? { type: "resolve", id: note.annotation.id, reply: "" } : { type: "reopen", id: note.annotation.id },
+    );
+    if (!reply.ok) return reply.error;
+    if (reply.type !== "state") return "réponse inattendue";
+    this.#upsert(reply.note);
     return null;
   }
 
@@ -552,7 +571,12 @@ class Overlay {
     head.append(el("strong", "", `Note ${annotation.seq}`), el("span", `state ${state}`, STATE_LABEL[state]));
     const comment = el("p", "card-comment", annotation.comment);
     const answer = resolution ? el("div", "card-reply") : null;
-    if (answer && resolution) answer.append(el("strong", "", "Réponse de Claude"), el("p", "", resolution.reply));
+    if (answer && resolution) {
+      answer.append(
+        el("strong", "", resolution.author.kind === "agent" ? "Réponse de Claude" : "Réglée par toi"),
+        el("p", "", resolution.reply),
+      );
+    }
     const preview = el("canvas", "preview");
     const { anchor } = annotation.mark;
     const target = el("p", "card-target");
@@ -563,8 +587,19 @@ class Overlay {
     const close = el("button", "ghost", "Fermer");
     close.type = "button";
     close.addEventListener("click", () => this.#closePanel());
+    const toggle = el("button", "ghost", resolution ? "Rouvrir" : "Marquer réglée");
+    toggle.type = "button";
+    toggle.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      const error = await this.#setResolved(note, !resolution);
+      if (error) {
+        toggle.textContent = `Non changé : ${error}`;
+        return;
+      }
+      this.#closePanel();
+    });
     const actions = el("div", "actions");
-    actions.append(close);
+    actions.append(toggle, close);
     panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
     this.#openPanel(panel, near);
     close.focus();
