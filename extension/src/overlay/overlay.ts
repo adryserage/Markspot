@@ -160,8 +160,22 @@ class Overlay {
     this.#layer.addEventListener("pointermove", (e) => this.#onMove(e));
     this.#layer.addEventListener("pointerdown", (e) => this.#onDown(e));
     this.#layer.addEventListener("pointerup", (e) => this.#onUp(e));
-    // Les touches tapées dans l'overlay ne remontent pas aux raccourcis de la page.
-    for (const type of ["keydown", "keyup", "keypress"]) {
+    // Ce qu'on tape dans l'overlay ne remonte pas aux écouteurs de la page (raccourcis, saisie).
+    // Limite : un écouteur de la page posé en capture sur window ou document le voit quand même.
+    for (const type of [
+      "keydown",
+      "keyup",
+      "keypress",
+      "input",
+      "beforeinput",
+      "textInput",
+      "compositionstart",
+      "compositionupdate",
+      "compositionend",
+      "paste",
+      "cut",
+      "copy",
+    ]) {
       this.#root.addEventListener(type, (e) => e.stopPropagation());
     }
     addEventListener("keydown", (e) => this.#onKey(e), true);
@@ -566,7 +580,8 @@ class Overlay {
     this.#port = port;
     port.onMessage.addListener((push: OverlayPush) => {
       if (push.type === "note") this.#upsert(push.note);
-      else this.#remove([push.id]);
+      else if (push.type === "removed") this.#remove([push.id]);
+      else this.#menu.notify(push.text);
     });
     port.onDisconnect.addListener(() => {
       this.#port = null;

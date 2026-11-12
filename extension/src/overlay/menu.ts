@@ -304,6 +304,11 @@ export class NotesMenu {
     this.#undo.hidden = true;
   }
 
+  /** Un message du service worker (par exemple une résolution refusée par le programme local). */
+  notify(text: string): void {
+    this.#say(text, true);
+  }
+
   cancelEdit(): void {
     this.#editing = false;
     this.#cancelClearAll();
