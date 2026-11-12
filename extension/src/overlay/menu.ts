@@ -12,7 +12,12 @@ export interface MenuActions {
   clearAll(notes: NoteView[]): Promise<string | null>;
   /** Marque la note réglée (true) ou la rouvre (false). */
   setResolved(note: NoteView, resolved: boolean): Promise<string | null>;
+  /** Règle ces notes ; rend celles qui ont été réglées et un message s'il en manque. */
+  resolveAll(notes: NoteView[]): Promise<{ done: NoteView[]; error: string | null }>;
+  openExport(): Promise<string | null>;
 }
+
+const UNDO_MS = 8000;
 
 export type NoteState = "pending" | "open" | "resolved";
 export const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
@@ -29,6 +34,16 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 export class NotesMenu {
   readonly element = el("div", "menu");
   readonly #toggle = el("button", "menu-toggle");
+  readonly #quick = el("div", "quick");
+  readonly #quickResolve = el("button", "quick-button", "Tout régler");
+  readonly #quickExport = el("button", "quick-button", "Exporter");
+  readonly #quickClear = el("button", "quick-button", "Effacer réglées");
+  readonly #quickClearAll = el("button", "quick-button danger", "Tout effacer");
+  readonly #undo = el("div", "quick-undo");
+  readonly #undoText = el("span", "", "");
+  readonly #undoButton = el("button", "ghost small", "Annuler");
+  #undoNotes: NoteView[] = [];
+  #undoTimer = 0;
   readonly #panel = el("div", "menu-panel");
   readonly #list = el("ol", "menu-list");
   readonly #clear = el("button", "ghost menu-clear", "Effacer les notes réglées");
@@ -69,7 +84,36 @@ export class NotesMenu {
     this.#confirm.hidden = true;
     this.#panel.hidden = true;
     this.#panel.append(this.#list, this.#message, this.#clear, this.#clearAll, this.#confirm);
-    this.element.append(this.#toggle, this.#panel);
+
+    for (const button of [this.#quickResolve, this.#quickExport, this.#quickClear, this.#quickClearAll, this.#undoButton]) {
+      button.type = "button";
+    }
+    this.#quickResolve.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#resolveAll();
+    });
+    this.#quickExport.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      const error = await this.actions.openExport();
+      if (error) this.#say(`Export impossible : ${error}`, true);
+    });
+    this.#quickClear.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#clearResolved();
+    });
+    // La confirmation vit dans le panneau : le bouton express l'ouvre puis la montre.
+    this.#quickClearAll.addEventListener("click", (e) => {
+      if (!e.isTrusted) return;
+      this.#setOpen(true);
+      this.#askClearAll();
+    });
+    this.#undoButton.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#undoResolveAll();
+    });
+    this.#undo.append(this.#undoText, this.#undoButton);
+    this.#undo.hidden = true;
+    this.#quick.append(this.#quickResolve, this.#quickExport, this.#quickClear, this.#quickClearAll);
+    const top = el("div", "menu-top");
+    top.append(this.#quick, this.#toggle);
+    this.element.append(top, this.#undo, this.#panel);
     this.update([]);
   }
 
@@ -84,6 +128,9 @@ export class NotesMenu {
     this.#toggle.disabled = notes.length === 0;
     this.#clear.hidden = !notes.some((n) => stateOf(n) === "resolved");
     this.#clearAll.hidden = notes.length === 0;
+    this.#quickResolve.disabled = !notes.some((n) => stateOf(n) !== "resolved");
+    this.#quickClear.disabled = !notes.some((n) => stateOf(n) === "resolved");
+    this.#quickClearAll.disabled = notes.length === 0;
     this.#cancelClearAll();
     if (notes.length === 0) this.#setOpen(false);
     if (this.#open && !this.#editing) this.#render();
@@ -92,7 +139,44 @@ export class NotesMenu {
   close(): void {
     this.#editing = false;
     this.#cancelClearAll();
+    this.#hideUndo();
     this.#setOpen(false);
+  }
+
+  #say(text: string, error: boolean): void {
+    this.#message.textContent = text;
+    this.#message.classList.toggle("error", error);
+    if (text) this.#setOpen(true);
+  }
+
+  async #resolveAll(): Promise<void> {
+    const open = this.#notes.filter((n) => stateOf(n) !== "resolved");
+    if (open.length === 0) return;
+    this.#quickResolve.disabled = true;
+    const { done, error } = await this.actions.resolveAll(open);
+    this.#quickResolve.disabled = false;
+    if (error) this.#say(error, true);
+    if (done.length === 0) return;
+    // L'annulation vit ici, hors de update() : les notes poussées pendant la boucle ne l'effacent pas.
+    this.#undoNotes = done;
+    this.#undoText.textContent = done.length === 1 ? "1 note réglée." : `${done.length} notes réglées.`;
+    this.#undo.hidden = false;
+    clearTimeout(this.#undoTimer);
+    this.#undoTimer = setTimeout(() => this.#hideUndo(), UNDO_MS) as unknown as number;
+  }
+
+  async #undoResolveAll(): Promise<void> {
+    const notes = this.#undoNotes;
+    this.#hideUndo();
+    let failed = 0;
+    for (const note of notes) if (await this.actions.setResolved(note, false)) failed++;
+    if (failed > 0) this.#say(`${failed} note(s) non rouverte(s) : Claude y a peut-être répondu entre-temps.`, true);
+  }
+
+  #hideUndo(): void {
+    clearTimeout(this.#undoTimer);
+    this.#undoNotes = [];
+    this.#undo.hidden = true;
   }
 
   cancelEdit(): void {
