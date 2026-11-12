@@ -45,6 +45,10 @@ export class NotesMenu {
   readonly #sendInPanel = el("button", "primary menu-clear", "Envoyer à Claude");
   readonly #target = el("label", "menu-target");
   readonly #targetSelect = el("select", "menu-target-select");
+  /** Rangée « Envoyer à » + « Rafraîchir » : le bouton reste hors du label du choix. */
+  readonly #targetRow = el("div", "menu-target-row");
+  readonly #refresh = el("button", "ghost small", "Rafraîchir");
+  #refreshing = false;
   #targetFocused = false;
   #canSend = true;
   readonly #quickResolve = el("button", "quick-button", "Tout régler");
@@ -95,9 +99,15 @@ export class NotesMenu {
     this.#confirm.append(this.#confirmText, answers);
     this.#confirm.hidden = true;
     this.#panel.hidden = true;
-    this.#panel.append(this.#list, this.#message, this.#target, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
+    this.#panel.append(this.#list, this.#message, this.#targetRow, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
 
     this.#target.append(el("span", "", "Envoyer à"), this.#targetSelect);
+    this.#refresh.type = "button";
+    this.#refresh.title = "Relire les sessions Claude qui écoutent";
+    this.#refresh.addEventListener("click", (e) => {
+      if (e.isTrusted) void this.#refreshTargets(true);
+    });
+    this.#targetRow.append(this.#target, this.#refresh);
     this.#targetSelect.addEventListener("focus", () => (this.#targetFocused = true));
     this.#targetSelect.addEventListener("blur", () => (this.#targetFocused = false));
     this.#targetSelect.addEventListener("change", (e) => {
@@ -158,7 +168,7 @@ export class NotesMenu {
       button.hidden = !this.#canSend;
       button.disabled = openCount === 0;
     }
-    this.#target.hidden = !this.#canSend;
+    this.#targetRow.hidden = !this.#canSend;
     this.#quickClear.disabled = !notes.some((n) => stateOf(n) === "resolved");
     this.#quickClearAll.disabled = notes.length === 0;
     this.#cancelClearAll();
@@ -193,9 +203,20 @@ export class NotesMenu {
   }
 
   /** Remplit « Envoyer à » : les projets qui écoutent, plus le choix gardé s'il n'écoute pas. */
-  async #refreshTargets(): Promise<void> {
-    if (!this.#canSend || this.#targetFocused) return;
-    const { listeners, chosen } = await this.actions.loadTargets();
+  async #refreshTargets(byHand = false): Promise<void> {
+    if (!this.#canSend || this.#targetFocused || this.#refreshing) return;
+    this.#refreshing = true;
+    this.#refresh.disabled = true;
+    let loaded;
+    try {
+      loaded = await this.actions.loadTargets();
+    } finally {
+      this.#refreshing = false;
+      this.#refresh.disabled = false;
+    }
+    // Le choix a pu être ouvert pendant la lecture : ne pas le refaire sous la souris.
+    if (this.#targetFocused) return;
+    const { listeners, chosen } = loaded;
     const counts = new Map<string, number>();
     for (const l of listeners) counts.set(l.name, (counts.get(l.name) ?? 0) + 1);
     const options: HTMLOptionElement[] = [];
@@ -207,6 +228,14 @@ export class NotesMenu {
     if (chosen && !counts.has(chosen)) options.push(new Option(`${chosen} (n'écoute pas)`, chosen));
     this.#targetSelect.replaceChildren(...options);
     this.#targetSelect.value = chosen ?? (counts.size === 1 ? [...counts.keys()][0]! : "");
+    if (byHand) {
+      this.#say(
+        counts.size === 0
+          ? "Aucune session n'écoute : lance « markspot claude », ou dis « écoute mes annotations » à la session."
+          : `${counts.size} projet${counts.size > 1 ? "s" : ""} à l'écoute.`,
+        false,
+      );
+    }
   }
 
   #say(text: string, error: boolean): void {

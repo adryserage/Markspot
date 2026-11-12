@@ -640,11 +640,19 @@ button.danger:hover {
 }
 
 /* « Envoyer à » : la session Claude qui reçoit les envois de ce site. */
-.menu-target {
+.menu-target-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 8px 0 4px;
+}
+
+.menu-target {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
 }
 

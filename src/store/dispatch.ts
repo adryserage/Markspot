@@ -207,6 +207,19 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
   return null;
 }
 
+/**
+ * Y a-t-il un envoi en attente ou réclamé ? Lecture seule : une session qui écoute en
+ * permanence ne lance claimNext (qui écrit sur le partage) que s'il y a du travail.
+ */
+export async function hasWork(dataDir: string): Promise<boolean> {
+  const paths = dispatchPaths(dataDir);
+  for (const dir of [paths.dispatch, paths.claimed]) {
+    const names = await readdir(dir).catch(() => [] as string[]);
+    if (names.some((n) => n.endsWith(".json"))) return true;
+  }
+  return false;
+}
+
 /** Une écoute tuée entre la réclamation et la sortie ne doit pas perdre l'envoi. */
 async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>): Promise<void> {
   const paths = dispatchPaths(dataDir);
