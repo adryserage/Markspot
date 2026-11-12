@@ -254,6 +254,12 @@ export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Lis
   await rm(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), { force: true });
 }
 
+/** Rajeunit une réclamation encore en cours : elle ne passe pas pour abandonnée ni périmée. */
+export async function touchClaim(dataDir: string, dispatch: Dispatch, me: Listener): Promise<void> {
+  const at = new Date();
+  await utimes(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), at, at).catch(() => undefined);
+}
+
 /** Les écoutes vivantes pour cette adresse, telles que la page peut les voir. */
 export async function publicListeners(dataDir: string, url: string): Promise<PublicListener[]> {
   return (await liveListeners(dataDir))

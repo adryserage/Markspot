@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
+import type { AnnotationId } from "../core/model.ts";
 import { runHost } from "../host/host.ts";
 import { loadConfig, openAgentStore, openHostStore } from "../store/store.ts";
 import { BROWSER_IDS, isBrowserId } from "./browsers.ts";
@@ -96,12 +97,14 @@ async function main(argv: string[]): Promise<number> {
       const store = await openAgentStore(config);
       // Posé par `markspot claude`, qui lance Claude Code avec le drapeau des canaux.
       const channel = process.env.MARKSPOT_CHANNEL === "1";
-      const server = createServer(store, VERSION, { listenCommand: CLI_LAUNCHER, channel });
+      // L'accusé de réception du canal : lié après coup, le canal démarre après le serveur.
+      let seen: ((id?: AnnotationId) => void) | undefined;
+      const server = createServer(store, VERSION, { listenCommand: CLI_LAUNCHER, channel, onActivity: (id) => seen?.(id) });
       // connect() et non serveStdio() : Claude Code n'accepte les canaux qu'avec l'ancienne
       // ouverture du protocole, que serveStdio ne propose pas.
       const transport = new StdioServerTransport();
       await server.connect(transport);
-      const stopChannel = channel
+      const handle = channel
         ? startChannel({
             dataDir: config.dataDir,
             store,
@@ -109,7 +112,9 @@ async function main(argv: string[]): Promise<number> {
             push: (content, meta) =>
               server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }),
           })
-        : async () => {};
+        : null;
+      seen = handle ? (id) => handle.seen(id) : undefined;
+      const stopChannel = handle ? () => handle.stop() : async () => {};
       process.stderr.write(`markspot ${VERSION} MCP server on stdio${channel ? ", channel on" : ""}\n`);
       return new Promise<number>(() => {
         // Sortie explicite : stdin et les minuteries ne doivent pas garder le processus en vie.
