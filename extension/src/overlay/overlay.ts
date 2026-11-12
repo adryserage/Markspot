@@ -274,6 +274,11 @@ class Overlay {
     const reply = await ask({ type: "capture", zone: zone as ViewportRect, pageZone, viewport });
     this.#host.style.setProperty("visibility", "visible", "important");
 
+    // Échap pendant la capture : la personne est sortie, on jette le brouillon.
+    if (this.#mode !== "composing") {
+      if (reply.ok && reply.type === "captured") void ask({ type: "discard", draftId: reply.draftId });
+      return;
+    }
     if (!reply.ok || reply.type !== "captured") {
       this.#startPicking();
       this.#showBar(`Capture impossible : ${reply.ok ? "réponse inattendue" : reply.error}`, false);

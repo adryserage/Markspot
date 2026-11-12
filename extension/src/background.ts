@@ -13,7 +13,15 @@ import {
 } from "../../src/core/model.ts";
 import { HOST_NAME, type ExtensionToHost, type HostToExtension } from "../../src/core/protocol.ts";
 import { captureTab } from "./capture.ts";
-import { capturePng, createFromDraft, discardDraft, exportAll, listForPage, putDraft } from "./local-store.ts";
+import {
+  capturePng,
+  createFromDraft,
+  discardDraft,
+  exportAll,
+  listForPage,
+  purgeOldDrafts,
+  putDraft,
+} from "./local-store.ts";
 import type { OverlayReply, OverlayRequest } from "./messages.ts";
 
 declare const __MARKSPOT_NATIVE__: boolean;
@@ -147,3 +155,4 @@ globalThis.markspot = api;
 chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(connect);
 connect();
+void purgeOldDrafts(Date.now());
