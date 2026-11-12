@@ -4,7 +4,7 @@
 // pour que la page ne lise ni ne modifie les notes, et que ses styles ne s'y appliquent pas.
 
 import { fromBase64 } from "../../../src/core/base64.ts";
-import { contains, visiblePart } from "../../../src/core/geometry.ts";
+import { clampToViewport, contains, visiblePart } from "../../../src/core/geometry.ts";
 import type { Annotation, Mark, PageRect, Rect, Viewport, ViewportRect } from "../../../src/core/model.ts";
 import { OVERLAY_PORT, ask, type NoteView, type OverlayPush } from "../messages.ts";
 import { describeElement } from "./anchor.ts";
@@ -316,6 +316,8 @@ class Overlay {
   /** La boîte s'ouvre directement sur la capture, prête pour le dessin. */
   async #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): Promise<void> {
     const panel = el("form", "panel composer wide");
+    const bar = el("div", "panel-bar");
+    bar.append(el("span", "panel-title", "Nouvelle note"), el("span", "grip"));
     let pad: DrawingPad | null = null;
     let capture: HTMLElement;
     try {
@@ -346,7 +348,7 @@ class Overlay {
     const save = el("button", "primary", "Enregistrer la note");
     save.type = "submit";
     actions.append(cancel, save);
-    panel.append(capture, field, hint, actions);
+    panel.append(bar, capture, field, hint, actions);
 
     const submit = async () => {
       const comment = field.value.trim();
@@ -391,7 +393,8 @@ class Overlay {
       this.#startPicking();
     });
 
-    this.#openPanel(panel, zone);
+    const pageZone = mark.rect;
+    this.#openPanel(panel, () => ({ ...pageZone, x: pageZone.x - scrollX, y: pageZone.y - scrollY }), bar);
     field.focus();
   }
 
@@ -403,11 +406,69 @@ class Overlay {
   // ------------------------------------------------------------ panels
 
   /** Place le panneau sous la zone s'il y a la place, sinon au-dessus, sans sortir de la fenêtre. */
-  #openPanel(panel: HTMLElement, near: Rect): void {
+  /**
+   * Ouvre un panneau près de « home() » et le rend déplaçable par sa barre.
+   * home est relu au double-clic : la zone ou la pastille a pu bouger avec le défilement.
+   */
+  #openPanel(panel: HTMLElement, home: () => Rect, bar: HTMLElement): void {
     this.#closePanel();
     this.#panel = panel;
     this.#root.append(panel);
-    this.#placePanel(panel, near);
+    this.#placePanel(panel, home());
+    this.#makeDraggable(panel, bar, home);
+  }
+
+  #makeDraggable(panel: HTMLElement, bar: HTMLElement, home: () => Rect): void {
+    const THRESHOLD = 3;
+    let start: { x: number; y: number; left: number; top: number } | null = null;
+    let moving = false;
+    const moveTo = (left: number, top: number) => {
+      const at = clampToViewport(left, top, { width: panel.offsetWidth, height: panel.offsetHeight }, { width: innerWidth, height: innerHeight });
+      panel.style.left = `${at.x}px`;
+      panel.style.top = `${at.y}px`;
+    };
+    const end = () => {
+      start = null;
+      moving = false;
+      bar.classList.remove("grabbing");
+    };
+    bar.tabIndex = 0;
+    bar.setAttribute("role", "button");
+    bar.setAttribute("aria-label", "Déplacer le panneau : glisser, ou flèches du clavier. Double-clic pour le remettre en place.");
+    // Garde le focus dans le champ de commentaire pendant le glissement.
+    bar.addEventListener("mousedown", (e) => e.preventDefault());
+    bar.addEventListener("pointerdown", (e) => {
+      if (!e.isTrusted || e.button !== 0) return;
+      e.preventDefault();
+      bar.setPointerCapture(e.pointerId);
+      start = { x: e.clientX, y: e.clientY, left: panel.offsetLeft, top: panel.offsetTop };
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!e.isTrusted || !start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (!moving && Math.hypot(dx, dy) < THRESHOLD) return;
+      moving = true;
+      bar.classList.add("grabbing");
+      moveTo(start.left + dx, start.top + dy);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) bar.addEventListener(type, end);
+    bar.addEventListener("dblclick", (e) => {
+      if (e.isTrusted) this.#placePanel(panel, home());
+    });
+    bar.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 40 : 10;
+      const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (!delta) return;
+      e.preventDefault();
+      moveTo(panel.offsetLeft + delta[0]!, panel.offsetTop + delta[1]!);
+    });
+    // Le panneau grandit après coup (vignette, champ agrandi) ou la fenêtre rétrécit : il reste visible.
+    const keepInside = () => {
+      if (panel.isConnected) moveTo(panel.offsetLeft, panel.offsetTop);
+    };
+    new ResizeObserver(keepInside).observe(panel);
+    addEventListener("resize", keepInside, { passive: true });
   }
 
   #placePanel(panel: HTMLElement, near: Rect): void {
@@ -506,8 +567,7 @@ class Overlay {
     else scrollTo({ top: Math.max(0, note.annotation.mark.rect.y - innerHeight / 3), behavior: "instant" });
     await sleep(120);
     this.#renderPins();
-    const { x, y } = this.#pinPosition(note.annotation);
-    await this.#openCard(note, { x: x - 14, y: y - 14, width: 28, height: 28 });
+    await this.#openCard(note);
   }
 
   async #edit(note: NoteView, comment: string): Promise<string | null> {
@@ -547,7 +607,7 @@ class Overlay {
         const { x, y } = this.#pinPosition(annotation);
         pin.style.left = `${x}px`;
         pin.style.top = `${y}px`;
-        pin.addEventListener("click", () => void this.#openCard(note, toRect(pin.getBoundingClientRect())));
+        pin.addEventListener("click", () => void this.#openCard(note));
         return pin;
       }),
     );
@@ -561,12 +621,12 @@ class Overlay {
     });
   }
 
-  async #openCard(note: NoteView, near: Rect): Promise<void> {
+  async #openCard(note: NoteView): Promise<void> {
     const { annotation, resolution } = note;
     const panel = el("div", "panel card");
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", `Note ${annotation.seq}`);
-    const head = el("div", "card-head");
+    const head = el("div", "card-head panel-bar");
     const state = stateClass(note);
     head.append(el("strong", "", `Note ${annotation.seq}`), el("span", `state ${state}`, STATE_LABEL[state]));
     const comment = el("p", "card-comment", annotation.comment);
@@ -600,8 +660,16 @@ class Overlay {
     });
     const actions = el("div", "actions");
     actions.append(toggle, close);
+    head.append(el("span", "grip"));
     panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
-    this.#openPanel(panel, near);
+    this.#openPanel(
+      panel,
+      () => {
+        const { x, y } = this.#pinPosition(annotation);
+        return { x: x - 14, y: y - 14, width: 28, height: 28 };
+      },
+      head,
+    );
     close.focus();
 
     const reply = await ask({ type: "thumbnail", id: annotation.id });
