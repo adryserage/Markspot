@@ -14,7 +14,7 @@ const SCAN_MS = 2_000;
 
 export async function listen(options: { urlPrefix: string; timeoutSeconds: number; name: string }): Promise<number> {
   const config = await loadConfig();
-  const auth = config.dispatchKey && config.consumedFile ? { key: config.dispatchKey, consumedFile: config.consumedFile } : null;
+  const auth = config.dispatchKey && config.consumedDir ? { key: config.dispatchKey, consumedDir: config.consumedDir } : null;
   if (!auth) {
     process.stderr.write("markspot: no dispatch key on this machine. Run markspot install (and copy the key from your other machine with markspot key).\n");
     return 1;

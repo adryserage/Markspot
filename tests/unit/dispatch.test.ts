@@ -41,8 +41,8 @@ const listener = (id: string, urlPrefix = "", startedAt = "2026-11-12T08:00:00.0
 });
 const ids = ["01JD8000000000000000000001" as AnnotationId];
 const KEY = randomBytes(32);
-const AUTH = { key: KEY, consumedFile: join(tmpdir(), `markspot-consumed-${process.pid}-${Date.now()}.json`) };
-after(async () => rm(AUTH.consumedFile, { force: true }));
+const AUTH = { key: KEY, consumedDir: join(tmpdir(), `markspot-consumed-${process.pid}-${Date.now()}`) };
+after(async () => rm(AUTH.consumedDir, { recursive: true, force: true }));
 const HASHES = ["h"];
 
 test("chooseListener prefers the longest matching prefix, then the oldest", () => {
@@ -201,7 +201,7 @@ test("only a dispatch signed with this key is taken: none without key, a forged 
   await beat(dir, me);
   const sent = await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
   assert.equal(await claimNext(dir, me, null), null, "no key on this machine: nothing is taken");
-  assert.equal(await claimNext(dir, me, { key: randomBytes(32), consumedFile: AUTH.consumedFile }), null, "another key: nothing is taken");
+  assert.equal(await claimNext(dir, me, { key: randomBytes(32), consumedDir: AUTH.consumedDir }), null, "another key: nothing is taken");
   // Un écrivain du partage change l'adresse d'un envoi signé, ou en dépose un sans signature.
   const file = join(dispatchPaths(dir).dispatch, `${sent.id}.json`);
   const raw = JSON.parse(await readFileText(file));
@@ -232,4 +232,17 @@ test("a delivered dispatch copied back later is refused, and so is one signed to
   const old = { id: "01JD8000000000000000000094", ids, url: "http://localhost:3000/", at, to: "projet", hashes: HASHES };
   await writeFile(join(dispatchPaths(dir).dispatch, `${old.id}.json`), JSON.stringify({ ...old, sig: signPayload(KEY, old) }));
   assert.equal(await claimNext(dir, me, AUTH), null, "too old to be taken");
+});
+
+test("a copy dropped next to a dispatch still waiting for its acknowledgement is ignored", async () => {
+  const dir = await dataDir();
+  const me = listener("01JD8000000000000000000095");
+  await beat(dir, me);
+  const sent = await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
+  const copy = await readFileText(join(dispatchPaths(dir).dispatch, `${sent.id}.json`));
+  assert.equal((await claimNext(dir, me, AUTH))?.id, sent.id); // poussé, pas encore transmis
+  await writeFile(join(dispatchPaths(dir).dispatch, `${sent.id}.json`), copy);
+  const other = listener("01JD8000000000000000000096");
+  await beat(dir, other);
+  assert.equal(await claimNext(dir, other, AUTH), null, "the original is still claimed: the copy is not taken");
 });

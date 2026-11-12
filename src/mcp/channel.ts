@@ -118,6 +118,7 @@ export function startChannel(options: ChannelOptions): Channel {
       return;
     }
     emptyQueue = "";
+    if (pending.has(dispatch.id)) return; // déjà poussé, en attente de son accusé : rien à refaire
     if (received.has(dispatch.id)) {
       received.delete(dispatch.id);
       return completeClaim(dataDir, dispatch, me, options.auth); // Claude l'avait ouvert après le délai

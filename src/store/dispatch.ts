@@ -42,33 +42,38 @@ export const KEY_BYTES = 32;
 /** Ce qu'il faut pour prendre un envoi : la clé, et la liste locale des envois déjà transmis. */
 export interface DispatchAuth {
   key: Buffer;
-  /** Hors du partage, à côté de la clé : un envoi transmis recopié plus tard n'est jamais repris. */
-  consumedFile: string;
+  /** Dossier local, à côté de la clé : un envoi transmis recopié plus tard n'est jamais repris. */
+  consumedDir: string;
 }
 
 /** Au-delà, un envoi signé est trop vieux (ou daté dans le futur) : une copie rejouée est refusée. */
 const MAX_DISPATCH_AGE_MS = 25 * 60 * 60 * 1000;
 
-async function consumedIds(file: string): Promise<Map<string, number>> {
+/** Un fichier vide par envoi transmis, dans un dossier local : aucune écriture partagée à perdre. */
+async function isConsumed(dir: string, id: string): Promise<boolean> {
   try {
-    const raw = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (!Array.isArray(raw)) return new Map();
-    const cutoff = Date.now() - MAX_DISPATCH_AGE_MS;
-    return new Map(
-      raw.filter((e): e is [string, number] => Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "number" && e[1] > cutoff),
-    );
+    const at = (await stat(join(dir, id))).mtimeMs;
+    return Date.now() - at < MAX_DISPATCH_AGE_MS;
   } catch {
-    return new Map();
+    return false;
   }
 }
 
-async function markConsumed(file: string, id: string): Promise<void> {
-  const seen = await consumedIds(file);
-  seen.set(id, Date.now());
-  await mkdir(dirname(file), { recursive: true, mode: DIR_MODE });
-  const tmp = `${file}.tmp-${randomBytes(4).toString("hex")}`;
-  await writeFile(tmp, JSON.stringify([...seen]), { mode: FILE_MODE });
-  await renameRetry(tmp, file);
+async function markConsumed(dir: string, id: string): Promise<void> {
+  await mkdir(dir, { recursive: true, mode: DIR_MODE });
+  await writeFile(join(dir, id), "", { mode: FILE_MODE });
+}
+
+/** Retire les marques de plus de 25 heures : la date signée d'un tel envoi le refuse déjà. */
+async function pruneConsumed(dir: string): Promise<void> {
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    const file = join(dir, name);
+    try {
+      if (Date.now() - (await stat(file)).mtimeMs > MAX_DISPATCH_AGE_MS) await rm(file, { force: true });
+    } catch {
+      // déjà retirée
+    }
+  }
 }
 
 /** La clé lue dans son fichier (base64), ou null si elle manque ou n'a pas la bonne taille. */
@@ -280,7 +285,7 @@ export async function removeBeat(dataDir: string, id: string): Promise<void> {
 export async function claimNext(dataDir: string, me: Listener, auth: DispatchAuth | null): Promise<Dispatch | null> {
   if (!auth) return null; // sans clé, aucun envoi ne peut être vérifié
   const { key } = auth;
-  const consumed = await consumedIds(auth.consumedFile);
+  await pruneConsumed(auth.consumedDir);
   const paths = dispatchPaths(dataDir);
   await privateDir(paths.dispatch);
   await privateDir(paths.claimed);
@@ -294,7 +299,9 @@ export async function claimNext(dataDir: string, me: Listener, auth: DispatchAut
     const file = join(paths.dispatch, name);
     const dispatch = asDispatch(await readJsonFile(file), key); // non signé : laissé en place, la purge le retire
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
-    if (consumed.has(dispatch.id)) continue; // déjà transmis par ce poste : une copie rejouée
+    if (await isConsumed(auth.consumedDir, dispatch.id)) continue; // déjà transmis par ce poste : une copie rejouée
+    // Déjà réclamé (l'original attend son accusé de réception) : une copie déposée à côté est ignorée.
+    if ((await readdir(paths.claimed).catch(() => [] as string[])).some((n) => n.startsWith(`${dispatch.id}-`))) continue;
     // Envoi visé : seules les écoutes de ce nom, même après le délai de grâce.
     if (dispatch.to !== undefined && dispatch.to !== me.name) continue;
     if (dispatch.toHost !== undefined && dispatch.toHost !== cleanName(me.host)) continue;
@@ -318,7 +325,9 @@ export async function claimNext(dataDir: string, me: Listener, auth: DispatchAut
     const at = new Date();
     await utimes(claimed, at, at).catch(() => undefined);
     const mine = asDispatch(await readJsonFile(claimed), key);
-    if (mine) return mine;
+    // Le fichier a pu être remplacé entre la lecture et le rename : seul celui qui a été vérifié passe.
+    if (mine && mine.sig === dispatch.sig) return mine;
+    await rm(claimed, { force: true });
   }
   return null;
 }
@@ -359,7 +368,7 @@ async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>
 
 /** L'envoi a été transmis à la session : il disparaît, il ne peut plus revenir dans la file. */
 export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Listener, auth: DispatchAuth): Promise<void> {
-  await markConsumed(auth.consumedFile, dispatch.id);
+  await markConsumed(auth.consumedDir, dispatch.id);
   await rm(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), { force: true });
 }
 
