@@ -122,12 +122,19 @@ async function main(argv: string[]): Promise<number> {
     }
     case "claude": {
       // Lance Claude Code avec le canal Markspot : la session se réveille à « Envoyer à Claude ».
-      const { spawn } = await import("node:child_process");
-      const args = ["--dangerously-load-development-channels", "server:markspot", ...rest];
-      const windows = process.platform === "win32";
-      const child = spawn(windows ? ["claude", ...args.map((a) => `"${a.replaceAll('"', '\\"')}"`)].join(" ") : "claude", windows ? [] : args, {
+      const [{ spawn }, { claudeCommand, realProbe }] = await Promise.all([
+        import("node:child_process"),
+        import("./claude-command.ts"),
+      ]);
+      const command = claudeCommand(["--dangerously-load-development-channels", "server:markspot", ...rest], realProbe());
+      if (!command) {
+        process.stderr.write("markspot: Claude Code not found. Install it, then run markspot claude again.\n");
+        return 1;
+      }
+      // Sans shell : un chemin avec un espace reste un seul argument (voir claude-command.ts).
+      const child = spawn(command.file, command.args, {
         stdio: "inherit",
-        shell: windows, // claude.cmd ou claude.exe : seul le shell trouve les deux
+        windowsVerbatimArguments: command.verbatim,
         env: { ...process.env, MARKSPOT_CHANNEL: "1" },
       });
       return new Promise<number>((done) => {
