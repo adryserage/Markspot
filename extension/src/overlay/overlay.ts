@@ -101,7 +101,8 @@ class Overlay {
     this.#menu = new NotesMenu({
       goTo: (note) => void this.#goTo(note),
       edit: (note, comment) => this.#edit(note, comment),
-      clearResolved: (notes) => this.#clearResolved(notes),
+      clearResolved: (notes) => this.#clearNotes(notes, false),
+      clearAll: (notes) => this.#clearNotes(notes, true),
     });
     this.#menu.element.hidden = true;
     this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar, this.#menu.element);
@@ -308,24 +309,30 @@ class Overlay {
     }
     this.#draftId = reply.draftId;
     this.#bar.hidden = true;
-    this.#openComposer(mark, viewport, zone, reply.png);
+    await this.#openComposer(mark, viewport, zone, reply.png);
   }
 
-  #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): void {
-    const panel = el("form", "panel composer");
-    const preview = el("canvas", "preview");
-    void drawPng(preview, png, 316, 160);
+  /** La boîte s'ouvre directement sur la capture, prête pour le dessin. */
+  async #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): Promise<void> {
+    const panel = el("form", "panel composer wide");
     let pad: DrawingPad | null = null;
-    const draw = el("button", "ghost small draw", "Dessiner sur la capture");
-    draw.type = "button";
-    draw.addEventListener("click", async () => {
+    let capture: HTMLElement;
+    try {
       const bitmap = await createImageBitmap(new Blob([fromBase64(png)], { type: "image/png" }));
       pad = new DrawingPad(bitmap, Math.min(560, innerWidth - 60));
-      preview.replaceWith(pad.element);
-      draw.remove();
-      panel.classList.add("wide");
-      this.#placePanel(panel, zone);
-    });
+      capture = pad.element;
+    } catch {
+      // Image illisible : simple vignette, sans dessin.
+      const preview = el("canvas", "preview");
+      void drawPng(preview, png, 316, 160);
+      capture = preview;
+      panel.classList.remove("wide");
+    }
+    // Échap pendant le décodage : la personne est sortie.
+    if (this.#mode !== "composing") {
+      this.#discardDraft();
+      return;
+    }
     const field = el("textarea", "comment");
     field.placeholder = "Qu'est-ce qui ne va pas ici ?";
     field.rows = 3;
@@ -338,7 +345,7 @@ class Overlay {
     const save = el("button", "primary", "Enregistrer la note");
     save.type = "submit";
     actions.append(cancel, save);
-    panel.append(preview, draw, field, hint, actions);
+    panel.append(capture, field, hint, actions);
 
     const submit = async () => {
       const comment = field.value.trim();
@@ -510,8 +517,8 @@ class Overlay {
     return null;
   }
 
-  async #clearResolved(notes: NoteView[]): Promise<string | null> {
-    const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id) });
+  async #clearNotes(notes: NoteView[], includeOpen: boolean): Promise<string | null> {
+    const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id), includeOpen });
     if (!reply.ok) return reply.error;
     if (reply.type !== "cleared") return "réponse inattendue";
     this.#remove(reply.ids);

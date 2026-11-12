@@ -90,6 +90,45 @@ host.onConnected(async () => {
   await flushOutbox();
 });
 
+/**
+ * Retire des notes de cette page, et seulement de celle-ci. Passe après l'envoi de la file en
+ * cours : sinon une note en route serait recréée par l'hôte juste après son retrait.
+ */
+function clearOnPage(page: string, ids: AnnotationId[], includeOpen: boolean): Promise<AnnotationId[]> {
+  const run = flushing.then(async () => {
+    const wanted = new Set(ids);
+    const removed: AnnotationId[] = [];
+    if (includeOpen) {
+      for (const note of await allAnnotations()) {
+        if (!wanted.has(note.id) || pageKeyOf(note.page.url) !== page) continue;
+        await removeFromOutbox(note.id);
+        removed.push(note.id);
+        broadcast({ type: "removed", id: note.id }, note.page.url);
+      }
+    }
+    const onHost = ids.filter((id) => {
+      const thread = threads.get(id);
+      return thread && pageKeyOf(thread.annotation.page.url) === page && (includeOpen || thread.resolution);
+    });
+    if (onHost.length > 0) {
+      const reply = await host.request({ type: "clear", ids: onHost, includeOpen });
+      if (reply.type !== "cleared") throw new Error("refusé par le programme local");
+      for (const id of reply.ids) {
+        const known = threads.get(id);
+        threads.delete(id);
+        removed.push(id);
+        if (known) broadcast({ type: "removed", id }, known.annotation.page.url);
+      }
+    }
+    return removed;
+  });
+  flushing = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function notesForPage(url: string): Promise<NoteView[]> {
   const key = pageKeyOf(url);
   const fromHost = [...threads.values()].filter((t) => pageKeyOf(t.annotation.page.url) === key).map(hostView);
@@ -168,20 +207,8 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "edited", note: hostView(reply.thread) };
     }
     case "clear": {
-      const page = sender.url ? pageKeyOf(sender.url) : null;
-      const ids = request.ids.filter((id) => {
-        const thread = threads.get(id);
-        return thread?.resolution && pageKeyOf(thread.annotation.page.url) === page;
-      });
-      if (ids.length === 0) return { ok: true, type: "cleared", ids: [] };
-      const reply = await host.request({ type: "clear", ids });
-      if (reply.type !== "cleared") return { ok: false, error: "refusé par le programme local" };
-      for (const id of reply.ids) {
-        const known = threads.get(id);
-        threads.delete(id);
-        if (known) broadcast({ type: "removed", id }, known.annotation.page.url);
-      }
-      return { ok: true, type: "cleared", ids: reply.ids };
+      if (!sender.url) return { ok: false, error: "page inconnue" };
+      return { ok: true, type: "cleared", ids: await clearOnPage(pageKeyOf(sender.url), request.ids, request.includeOpen) };
     }
     case "discard":
       await discardDraft(request.draftId);

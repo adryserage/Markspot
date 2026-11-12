@@ -25,8 +25,8 @@ export type OverlayRequest =
       strokes: Stroke[];
     }
   | { type: "edit"; id: AnnotationId; comment: string }
-  /** Retire ces notes si elles sont réglées et sur cette page. */
-  | { type: "clear"; ids: AnnotationId[] }
+  /** Retire ces notes de cette page : les réglées seulement, ou toutes avec includeOpen. */
+  | { type: "clear"; ids: AnnotationId[]; includeOpen: boolean }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
