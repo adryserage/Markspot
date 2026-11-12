@@ -2,7 +2,7 @@
 // de la page, un clic va à la note, « Modifier » change le commentaire d'une note ouverte,
 // et « Effacer les notes réglées » retire celles que Claude a déjà réglées.
 
-import type { PublicListener } from "../../../src/core/protocol.ts";
+import type { PublicListener, SendTarget } from "../../../src/core/protocol.ts";
 import type { NoteView } from "../messages.ts";
 
 export interface MenuActions {
@@ -19,8 +19,8 @@ export interface MenuActions {
   /** « Envoyer à Claude » ; rend le message à afficher, et choose quand il faut choisir la session. */
   sendToClaude(notes: NoteView[]): Promise<{ text: string; error: boolean; choose?: boolean }>;
   /** Les sessions qui écoutent cette page, et le projet choisi pour ce site. */
-  loadTargets(): Promise<{ listeners: PublicListener[]; chosen: string | null }>;
-  setTarget(name: string | null): Promise<void>;
+  loadTargets(): Promise<{ listeners: PublicListener[]; chosen: SendTarget | null }>;
+  setTarget(target: SendTarget | null): Promise<void>;
 }
 
 const UNDO_MS = 8000;
@@ -50,6 +50,8 @@ export class NotesMenu {
   readonly #refresh = el("button", "ghost small", "Rafraîchir");
   #refreshing = false;
   #targetFocused = false;
+  /** La session de chaque option, par sa position : aucune option réelle ne vaut "" comme le choix vide. */
+  #targetOptions: SendTarget[] = [];
   #canSend = true;
   readonly #quickResolve = el("button", "quick-button", "Tout régler");
   readonly #quickExport = el("button", "quick-button", "Exporter");
@@ -111,7 +113,9 @@ export class NotesMenu {
     this.#targetSelect.addEventListener("focus", () => (this.#targetFocused = true));
     this.#targetSelect.addEventListener("blur", () => (this.#targetFocused = false));
     this.#targetSelect.addEventListener("change", (e) => {
-      if (e.isTrusted) void this.actions.setTarget(this.#targetSelect.value || null);
+      if (!e.isTrusted) return;
+      const value = this.#targetSelect.value;
+      void this.actions.setTarget(value === "" ? null : (this.#targetOptions[Number(value)] ?? null));
     });
     for (const button of [this.#quickSend, this.#sendInPanel]) {
       button.type = "button";
@@ -217,22 +221,47 @@ export class NotesMenu {
     // Le choix a pu être ouvert pendant la lecture : ne pas le refaire sous la souris.
     if (this.#targetFocused) return;
     const { listeners, chosen } = loaded;
-    const counts = new Map<string, number>();
-    for (const l of listeners) counts.set(l.name, (counts.get(l.name) ?? 0) + 1);
-    const options: HTMLOptionElement[] = [];
-    const placeholder = new Option(counts.size === 0 ? "Aucune session n'écoute" : "Choisir la session", "");
-    options.push(placeholder);
-    for (const [name, count] of counts) {
-      options.push(new Option(count > 1 ? `${name} (${count} sessions)` : name || "(sans nom)", name));
+    // Une option par projet et par poste ; le poste ne s'affiche que si le nom existe sur deux postes.
+    const groups = new Map<string, { target: SendTarget; count: number }>();
+    for (const l of listeners) {
+      const key = `${l.name}\n${l.host}`;
+      const group = groups.get(key);
+      if (group) group.count++;
+      else groups.set(key, { target: { name: l.name, host: l.host }, count: 1 });
     }
-    if (chosen && !counts.has(chosen)) options.push(new Option(`${chosen} (n'écoute pas)`, chosen));
+    const hostsOf = (name: string) => new Set([...groups.values()].filter((g) => g.target.name === name).map((g) => g.target.host));
+    const label = (t: SendTarget) => (t.host && hostsOf(t.name).size > 1 ? `${t.name} (${t.host})` : t.name);
+    const options: HTMLOptionElement[] = [new Option(groups.size === 0 ? "Aucune session n'écoute" : "Choisir la session", "")];
+    this.#targetOptions = [];
+    let selected = "";
+    for (const { target, count } of groups.values()) {
+      if (!target.name) {
+        // Écoute d'une ancienne version, sans nom : on ne peut pas la viser.
+        const old = new Option("(session sans nom : mets markspot à jour)", "");
+        old.disabled = true;
+        options.push(old);
+        continue;
+      }
+      const value = String(this.#targetOptions.push(target) - 1);
+      options.push(new Option(count > 1 ? `${label(target)} (${count} sessions)` : label(target), value));
+      if (chosen && chosen.name === target.name && (chosen.host ? chosen.host === target.host : hostsOf(target.name).size === 1)) {
+        selected = value;
+      }
+    }
+    const projects = this.#targetOptions.length;
+    if (chosen && !listeners.some((l) => l.name === chosen.name && (!chosen.host || l.host === chosen.host))) {
+      const value = String(this.#targetOptions.push(chosen) - 1);
+      options.push(new Option(`${chosen.host ? `${chosen.name} (${chosen.host})` : chosen.name} (n'écoute pas)`, value));
+      selected = value;
+    }
+    if (!chosen && projects === 1) selected = "0";
     this.#targetSelect.replaceChildren(...options);
-    this.#targetSelect.value = chosen ?? (counts.size === 1 ? [...counts.keys()][0]! : "");
+    this.#targetSelect.value = selected;
     if (byHand) {
       this.#say(
-        counts.size === 0
+        groups.size === 0
           ? "Aucune session n'écoute : lance « markspot claude », ou dis « écoute mes annotations » à la session."
-          : `${counts.size} projet${counts.size > 1 ? "s" : ""} à l'écoute.`,
+          : `${projects} session${projects > 1 ? "s" : ""} à l'écoute.`,
         false,
       );
     }

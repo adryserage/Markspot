@@ -23,6 +23,8 @@ export interface Dispatch {
   at: string;
   /** Nom du projet visé : seules les écoutes de ce nom le prennent. Absent dans les anciens envois. */
   to?: string;
+  /** Poste visé, avec to : seule l'écoute de ce nom sur ce poste le prend. */
+  toHost?: string;
 }
 
 export interface Listener {
@@ -97,7 +99,8 @@ function asDispatch(raw: unknown): Dispatch | null {
   if (!Array.isArray(d.ids) || d.ids.length === 0 || d.ids.length > 500) return null;
   if (!d.ids.every((id) => typeof id === "string" && ULID.test(id))) return null;
   const to = typeof d.to === "string" && d.to !== "" ? cleanName(d.to) : undefined;
-  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? ""), ...(to ? { to } : {}) };
+  const toHost = to && typeof d.toHost === "string" && d.toHost !== "" ? cleanName(d.toHost) : undefined;
+  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? ""), ...(to ? { to } : {}), ...(toHost ? { toHost } : {}) };
 }
 
 function asListener(raw: unknown): Listener | null {
@@ -125,10 +128,17 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
 }
 
 /** Écrit un envoi entier ou rien : une écoute ne lit jamais un JSON à moitié écrit. */
-export async function writeDispatch(dataDir: string, ids: AnnotationId[], url: string, to: string): Promise<Dispatch> {
+export async function writeDispatch(dataDir: string, ids: AnnotationId[], url: string, to: string, toHost?: string): Promise<Dispatch> {
   const paths = dispatchPaths(dataDir);
   await mkdir(paths.dispatch, { recursive: true });
-  const dispatch: Dispatch = { id: ulid(), ids, url, at: new Date().toISOString(), to: cleanName(to) };
+  const dispatch: Dispatch = {
+    id: ulid(),
+    ids,
+    url,
+    at: new Date().toISOString(),
+    to: cleanName(to),
+    ...(toHost ? { toHost: cleanName(toHost) } : {}),
+  };
   const tmp = join(paths.dispatch, `.tmp-${dispatch.id}`);
   await writeFile(tmp, JSON.stringify(dispatch));
   await renameRetry(tmp, join(paths.dispatch, `${dispatch.id}.json`));
@@ -184,13 +194,16 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
     // Envoi visé : seules les écoutes de ce nom, même après le délai de grâce.
     if (dispatch.to !== undefined && dispatch.to !== me.name) continue;
+    if (dispatch.toHost !== undefined && dispatch.toHost !== cleanName(me.host)) continue;
     let age: number;
     try {
       age = now - (await stat(file)).mtimeMs;
     } catch {
       continue;
     }
-    const group = dispatch.to !== undefined ? others.filter((l) => l.name === dispatch.to) : others;
+    const group = others.filter(
+      (l) => (dispatch.to === undefined || l.name === dispatch.to) && (dispatch.toHost === undefined || l.host === dispatch.toHost),
+    );
     if (chooseListener([...group, me], dispatch.url)?.id !== me.id && age < GRACE_MS) continue;
     const claimed = join(paths.claimed, `${dispatch.id}-${me.id}.json`);
     try {

@@ -98,7 +98,7 @@ export interface HostStore extends ThreadReader {
    * « Envoyer à Claude » : dépose un envoi pour le projet `to`. Sans `to`, le seul projet
    * qui écoute cette adresse ; s'il y en a plusieurs, ou aucun, rien n'est déposé.
    */
-  send(ids: AnnotationId[], url: string, to?: string): Promise<SendOutcome>;
+  send(ids: AnnotationId[], url: string, to?: string, host?: string): Promise<SendOutcome>;
   /** Les sessions qui écoutent cette adresse, pour le choix dans la page. */
   listeners(url: string): Promise<PublicListener[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
@@ -106,7 +106,7 @@ export interface HostStore extends ThreadReader {
 }
 
 export type SendOutcome =
-  | { kind: "sent"; to: string; listening: number }
+  | { kind: "sent"; to: string; host?: string; listening: number }
   | { kind: "choose"; listeners: PublicListener[] }
   | { kind: "nobody" };
 
@@ -398,19 +398,24 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
 
     resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
-    async send(ids, url, to) {
+    async send(ids, url, to, host) {
       const { cleanName, publicListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
       await purgeDispatch(config.dataDir);
       const live = await publicListeners(config.dataDir, url);
       let target = to ? cleanName(to) : "";
+      const onHost = host ? cleanName(host) : "";
       if (!target) {
-        const names = [...new Set(live.map((l) => l.name))];
-        if (names.length === 0) return { kind: "nobody" };
-        if (names.length > 1) return { kind: "choose", listeners: live };
-        target = names[0]!;
+        // Une écoute = un projet sur un poste : le même dossier sous Linux et Windows fait deux choix.
+        const pairs = new Set(live.map((l) => `${l.name}\n${l.host}`));
+        if (pairs.size === 0) return { kind: "nobody" };
+        if (pairs.size > 1) return { kind: "choose", listeners: live };
+        target = live[0]!.name;
+      } else if (!onHost && new Set(live.filter((l) => l.name === target).map((l) => l.host)).size > 1) {
+        return { kind: "choose", listeners: live }; // ancien choix sans poste, et ce projet écoute sur deux postes
       }
-      await writeDispatch(config.dataDir, ids, url, target);
-      return { kind: "sent", to: target, listening: live.filter((l) => l.name === target).length };
+      await writeDispatch(config.dataDir, ids, url, target, onHost || undefined);
+      const listening = live.filter((l) => l.name === target && (!onHost || l.host === onHost)).length;
+      return { kind: "sent", to: target, ...(onHost ? { host: onHost } : {}), listening };
     },
 
     async listeners(url) {

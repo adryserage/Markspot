@@ -192,3 +192,16 @@ test("an id with a path inside is refused", () => {
   const bad = { ...newAnnotation(), id: "../../etc/passwd" };
   assert.equal(NewAnnotationSchema.safeParse(bad).success, false);
 });
+
+test("send: the same project on two machines makes two choices, and a choice with its machine goes there", async () => {
+  const { beat } = await import("../../src/store/dispatch.ts");
+  const cfg = await config();
+  const store = await openHostStore(cfg);
+  const at = "2026-11-12T08:00:00.000Z";
+  await beat(cfg.dataDir, { id: "01JD8000000000000000000071", name: "site", urlPrefix: "", startedAt: at, pid: 1, host: "ADMSI" });
+  await beat(cfg.dataDir, { id: "01JD8000000000000000000072", name: "site", urlPrefix: "", startedAt: at, pid: 2, host: "AEGISZ2" });
+  const id = "01JD8000000000000000000073" as AnnotationId;
+  assert.equal((await store.send([id], "http://localhost:3000/")).kind, "choose", "no choice yet");
+  assert.equal((await store.send([id], "http://localhost:3000/", "site")).kind, "choose", "an old name-only choice must not pick a machine");
+  assert.deepEqual(await store.send([id], "http://localhost:3000/", "site", "AEGISZ2"), { kind: "sent", to: "site", host: "AEGISZ2", listening: 1 });
+});

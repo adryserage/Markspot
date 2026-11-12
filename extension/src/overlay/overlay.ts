@@ -115,16 +115,17 @@ class Overlay {
         }
         if (reply.type !== "sent") return { text: "Non envoyé : réponse inattendue", error: true };
         const what = reply.count === 1 ? "1 note envoyée" : `${reply.count} notes envoyées`;
+        const to = reply.host ? `${reply.to} (${reply.host})` : reply.to;
         return reply.listening > 0
-          ? { text: `${what} à ${reply.to}.`, error: false }
-          : { text: `${what} à ${reply.to}, qui n'écoute pas en ce moment : la session les prendra dès qu'elle écoutera.`, error: false };
+          ? { text: `${what} à ${to}.`, error: false }
+          : { text: `${what} à ${to}, qui n'écoute pas en ce moment : la session les prendra dès qu'elle écoutera.`, error: false };
       },
       loadTargets: async () => {
         const reply = await ask({ type: "targets" });
         return reply.ok && reply.type === "targets" ? { listeners: reply.listeners, chosen: reply.chosen } : { listeners: [], chosen: null };
       },
-      setTarget: async (name) => {
-        await ask({ type: "setTarget", name });
+      setTarget: async (target) => {
+        await ask({ type: "setTarget", target });
       },
       openExport: async () => {
         const reply = await ask({ type: "openExport" });
