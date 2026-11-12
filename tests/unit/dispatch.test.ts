@@ -10,6 +10,7 @@ import {
   claimNext,
   completeClaim,
   dispatchPaths,
+  hasWork,
   liveListeners,
   purgeDispatch,
   writeDispatch,
@@ -146,6 +147,18 @@ test("an aimed dispatch waits while its project restarts, then the new listener 
   const restarted = listener("01JD8000000000000000000041", "", "2026-11-12T10:00:00.000Z", "Markspot");
   await beat(dir, restarted);
   assert.equal((await claimNext(dir, restarted))?.to, "Markspot");
+});
+
+test("hasWork sees a waiting dispatch and a claimed one, nothing else", async () => {
+  const dir = await dataDir();
+  assert.equal(await hasWork(dir), false);
+  const me = listener("01JD8000000000000000000052");
+  await beat(dir, me);
+  assert.equal(await hasWork(dir), false, "a heartbeat is not work");
+  await writeDispatch(dir, ids, "http://localhost:3000/", "projet");
+  assert.equal(await hasWork(dir), true);
+  assert.ok(await claimNext(dir, me));
+  assert.equal(await hasWork(dir), true, "a claim may come back if its listener dies");
 });
 
 test("dead heartbeats are ignored and purged", async () => {
