@@ -1,4 +1,6 @@
 // Format d'une annotation. Pur : ni Node, ni Chrome, ni fichier.
+
+import type { Stroke } from "./drawing.ts";
 // Voir docs/conception.md pour le rôle de chaque champ.
 
 type Brand<T, B extends string> = T & { readonly __brand: B };
@@ -54,6 +56,8 @@ export interface Mark {
   rect: PageRect;
   /** La zone relative à la boîte de l'ancre, pour replacer la pastille si la page bouge. */
   rectInAnchor: Rect;
+  /** Traits dessinés sur le gros plan (déjà incrustés dans zone.png). */
+  drawing?: Stroke[];
 }
 
 export interface Viewport {
@@ -85,6 +89,9 @@ export interface Annotation extends NewAnnotation {
   schemaVersion: 1;
   /** Numéro de la pastille, donné par le propriétaire du stockage. */
   seq: number;
+  /** Nombre de modifications du commentaire (absent = jamais modifié). */
+  revision?: number;
+  updatedAt?: IsoTime;
 }
 
 export interface Resolution {

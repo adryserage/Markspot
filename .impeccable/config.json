@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "tests/fixtures/page.html"
+        ],
+        "createdAt": "2026-11-12T08:55:40.189Z",
+        "reason": "Claude: page d'essai des tests e2e, pas une interface livrée"
+      }
+    ]
+  }
+}

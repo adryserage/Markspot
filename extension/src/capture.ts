@@ -2,6 +2,7 @@
 // visible entier réduit, avec la zone encadrée. Tourne dans le service worker.
 
 import { fromBase64, toBase64 } from "../../src/core/base64.ts";
+import { drawStrokes, type Stroke } from "../../src/core/drawing.ts";
 import { contextSize, cropBox } from "../../src/core/geometry.ts";
 import type { CaptureKind, CaptureMeta, PageRect, Viewport, ViewportRect } from "../../src/core/model.ts";
 
@@ -22,6 +23,17 @@ function context2d(canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2D {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D canvas unavailable");
   return ctx;
+}
+
+/** Incruste les traits dans un PNG (base64) et rend le nouveau PNG. */
+export async function burnStrokes(png: string, strokes: Stroke[]): Promise<string> {
+  const image = await createImageBitmap(new Blob([fromBase64(png)], { type: "image/png" }));
+  const canvas = new OffscreenCanvas(image.width, image.height);
+  const ctx = context2d(canvas);
+  ctx.drawImage(image, 0, 0);
+  drawStrokes(ctx, strokes, image.width, image.height);
+  image.close();
+  return encode(canvas);
 }
 
 export async function captureTab(
