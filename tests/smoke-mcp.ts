@@ -63,6 +63,10 @@ try {
   const list = await client.callTool({ name: "markspot_list_annotations", arguments: {} });
   assert.ok(!list.isError, JSON.stringify(list.content));
   assert.equal((list.structuredContent as { total: number }).total, 1);
+  const listed = JSON.stringify(list.content) + JSON.stringify(list.structuredContent);
+  for (const pageData of ["/prix", "#acheter", "Acheter"]) {
+    assert.ok(!listed.includes(pageData), `the list must not carry page data (${pageData})`);
+  }
 
   const get = await client.callTool({ name: "markspot_get_annotation", arguments: { id: note.id } });
   const content = get.content as Array<{ type: string }>;
