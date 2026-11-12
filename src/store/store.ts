@@ -7,7 +7,9 @@
 //   <dataDir>/.staging/<pid>-<id>/           note en cours d'écriture, invisible des lecteurs
 //   <dataDir>/.trash/                        notes en cours de suppression
 //
-// Aucun fichier n'a deux sortes d'écrivains : pas de verrou. Deux hôtes (Brave et Chrome
+// resolution.json a deux écrivains possibles, un serveur MCP (Claude) ou l'hôte (la personne
+// règle la note à la main) : il est créé par link exclusif, le premier gagne. Pour le reste,
+// aucun fichier n'a deux sortes d'écrivains : pas de verrou. Deux hôtes (Brave et Chrome
 // ouverts ensemble) peuvent créer en même temps : le numéro se réserve par fichier exclusif.
 // Retirer une note (serveur MCP, ou hôte pour une note réglée) passe par un rename atomique
 // du dossier vers .trash : de deux suppressions concurrentes, la seconde ne trouve plus rien.
@@ -82,9 +84,21 @@ export interface HostStore extends ThreadReader {
    * includeOpen. Rend les identifiants retirés.
    */
   clearNotes(ids: AnnotationId[], options: { includeOpen: boolean }): Promise<AnnotationId[]>;
+  /** La personne règle la note à la main (même règle : la première réponse gagne). */
+  resolve(id: AnnotationId, reply: string, by: Author): Promise<ResolveOutcome>;
+  /**
+   * Rouvre une note réglée. resolvedAt est la résolution que la personne a vue : si une autre
+   * réponse l'a remplacée entre-temps, rien n'est retiré (changed).
+   */
+  reopen(id: AnnotationId, resolvedAt: string): Promise<ReopenOutcome>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
 }
+
+export type ReopenOutcome =
+  | { kind: "reopened"; thread: Thread }
+  | { kind: "changed"; thread: Thread }
+  | { kind: "not_found" };
 
 export type ResolveOutcome =
   | { kind: "resolved"; thread: Thread }
@@ -192,6 +206,43 @@ async function reserveSeq(paths: Layout, id: AnnotationId): Promise<number> {
   }
 }
 
+/** Écrit la résolution d'une note par link exclusif : la première réponse gagne. */
+async function writeResolution(
+  paths: Layout,
+  read: ThreadReader,
+  id: AnnotationId,
+  reply: string,
+  by: Author,
+): Promise<ResolveOutcome> {
+  const thread = await read.get(id);
+  if (!thread) return { kind: "not_found" };
+  const decide = (t: Thread): ResolveOutcome =>
+    t.resolution?.reply === reply ? { kind: "unchanged", thread: t } : { kind: "already_resolved", thread: t };
+  if (thread.resolution) return decide(thread);
+
+  const resolution: Resolution = {
+    schemaVersion: 1,
+    annotationId: id,
+    resolvedAt: new Date().toISOString() as IsoTime,
+    author: by,
+    reply,
+  };
+  const tmp = join(paths.note(id), `.resolution.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  try {
+    await writeFile(tmp, JSON.stringify(resolution, null, 2), { mode: FILE_MODE });
+    await link(tmp, join(paths.note(id), "resolution.json"));
+  } catch (error) {
+    if (code(error) === "ENOENT") return { kind: "not_found" };
+    if (code(error) !== "EEXIST") throw error;
+    const now = await read.get(id);
+    return now ? decide(now) : { kind: "not_found" };
+  } finally {
+    await unlink(tmp).catch(() => undefined);
+  }
+  const done = await read.get(id);
+  return done ? { kind: "resolved", thread: done } : { kind: "not_found" };
+}
+
 /** Retire une note : rename vers .trash puis suppression. false si elle n'existait plus. */
 async function removeNote(paths: Layout, id: AnnotationId): Promise<boolean> {
   await mkdir(paths.trash, { recursive: true, mode: DIR_MODE });
@@ -253,6 +304,22 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       const thread = await read.get(input.id);
       if (!thread) throw new Error(`note ${input.id} vanished after creation`);
       return thread;
+    },
+
+    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by),
+
+    async reopen(id, resolvedAt) {
+      const thread = await read.get(id);
+      if (!thread) return { kind: "not_found" };
+      if (!thread.resolution) return { kind: "reopened", thread };
+      if (thread.resolution.resolvedAt !== resolvedAt) return { kind: "changed", thread };
+      try {
+        await unlink(join(paths.note(id), "resolution.json"));
+      } catch (error) {
+        if (code(error) !== "ENOENT") throw error;
+      }
+      const now = await read.get(id);
+      return now ? { kind: "reopened", thread: now } : { kind: "not_found" };
     },
 
     async clearNotes(ids, { includeOpen }) {
@@ -339,35 +406,7 @@ export async function openAgentStore(config: StoreConfig): Promise<AgentStore> {
 
   return {
     ...read,
-    async resolve(id, reply, by) {
-      const thread = await read.get(id);
-      if (!thread) return { kind: "not_found" };
-      const decide = (t: Thread): ResolveOutcome =>
-        t.resolution?.reply === reply ? { kind: "unchanged", thread: t } : { kind: "already_resolved", thread: t };
-      if (thread.resolution) return decide(thread);
-
-      const resolution: Resolution = {
-        schemaVersion: 1,
-        annotationId: id,
-        resolvedAt: new Date().toISOString() as IsoTime,
-        author: by,
-        reply,
-      };
-      const tmp = join(paths.note(id), `.resolution.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
-      try {
-        await writeFile(tmp, JSON.stringify(resolution, null, 2), { mode: FILE_MODE });
-        await link(tmp, join(paths.note(id), "resolution.json"));
-      } catch (error) {
-        if (code(error) === "ENOENT") return { kind: "not_found" };
-        if (code(error) !== "EEXIST") throw error;
-        const now = await read.get(id);
-        return now ? decide(now) : { kind: "not_found" };
-      } finally {
-        await unlink(tmp).catch(() => undefined);
-      }
-      const done = await read.get(id);
-      return done ? { kind: "resolved", thread: done } : { kind: "not_found" };
-    },
+    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by),
 
     async clear(filter) {
       const threads = await read.list({

@@ -18,6 +18,15 @@ test("buildExport sorts by pin number and attaches both captures, null when miss
   assert.deepEqual(file.annotations[1]?.png, { zone: "id2-zone", context: null });
 });
 
+test("buildExport tells which notes are resolved", () => {
+  const resolution = { schemaVersion: 1, annotationId: "id1", resolvedAt: "2026-11-12T09:00:00.000Z", author: { kind: "user", id: "local", name: "local" }, reply: "Réglée à la main." } as const;
+  const file = buildExport([note(1), note(2)], () => null, new Date(), (a) => (a.seq === 1 ? (resolution as never) : null));
+  assert.deepEqual(file.annotations.map((a) => [a.seq, a.state, a.resolution?.reply ?? null]), [
+    [1, "resolved", "Réglée à la main."],
+    [2, "open", null],
+  ]);
+});
+
 test("exportFileName uses local time and no character Windows refuses", () => {
   const name = exportFileName(new Date(2026, 10, 12, 8, 5));
   assert.equal(name, "markspot-notes-2026-11-12-0805.json");

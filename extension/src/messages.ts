@@ -27,6 +27,9 @@ export type OverlayRequest =
   | { type: "edit"; id: AnnotationId; comment: string }
   /** Retire ces notes de cette page : les réglées seulement, ou toutes avec includeOpen. */
   | { type: "clear"; ids: AnnotationId[]; includeOpen: boolean }
+  /** La personne règle la note à la main, ou la rouvre. */
+  | { type: "resolve"; id: AnnotationId; reply: string }
+  | { type: "reopen"; id: AnnotationId }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
@@ -36,7 +39,9 @@ export type OverlayReply =
   | { ok: true; type: "captured"; draftId: string; png: string }
   | { ok: true; type: "saved"; note: NoteView }
   | { ok: true; type: "edited"; note: NoteView }
-  | { ok: true; type: "cleared"; ids: AnnotationId[] }
+  /** error : une partie seulement a été effacée (ids dit lesquelles). */
+  | { ok: true; type: "cleared"; ids: AnnotationId[]; error?: string }
+  | { ok: true; type: "state"; note: NoteView }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
   | { ok: true; type: "status"; native: boolean; connected: boolean }

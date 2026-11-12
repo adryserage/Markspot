@@ -145,6 +145,24 @@ test("clearNotes removes resolved notes, and open ones only with includeOpen", a
   assert.deepEqual(await host.list(), []);
 });
 
+test("the user resolves and reopens a note; a stale reopen keeps a newer reply", async () => {
+  const cfg = await config();
+  const host = await openHostStore(cfg);
+  const note = newAnnotation();
+  await host.create(note, pngs);
+  const user = { kind: "user", id: "local", name: "local" } as const;
+  const resolved = await host.resolve(note.id, "Réglée à la main.", user);
+  assert.equal(resolved.kind, "resolved");
+  const seen = resolved.kind === "resolved" ? resolved.thread.resolution!.resolvedAt : "";
+  assert.equal((await host.reopen(note.id, seen)).kind, "reopened");
+  assert.equal((await host.get(note.id))?.resolution, null);
+  // Claude répond, puis un « Rouvrir » en retard qui visait l'ancienne réponse ne retire rien.
+  await new Promise((r) => setTimeout(r, 5)); // dates à la milliseconde : deux réponses distinctes
+  await (await openAgentStore(cfg)).resolve(note.id, "Corrigé par Claude", agent);
+  assert.equal((await host.reopen(note.id, seen)).kind, "changed");
+  assert.equal((await host.get(note.id))?.resolution?.reply, "Corrigé par Claude");
+});
+
 test("an id with a path inside is refused", () => {
   const bad = { ...newAnnotation(), id: "../../etc/passwd" };
   assert.equal(NewAnnotationSchema.safeParse(bad).success, false);

@@ -103,6 +103,7 @@ class Overlay {
       edit: (note, comment) => this.#edit(note, comment),
       clearResolved: (notes) => this.#clearNotes(notes, false),
       clearAll: (notes) => this.#clearNotes(notes, true),
+      setResolved: (note, resolved) => this.#setResolved(note, resolved),
     });
     this.#menu.element.hidden = true;
     this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar, this.#menu.element);
@@ -521,7 +522,18 @@ class Overlay {
     const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id), includeOpen });
     if (!reply.ok) return reply.error;
     if (reply.type !== "cleared") return "réponse inattendue";
+    // Même en erreur, les notes déjà retirées disparaissent de la page.
     this.#remove(reply.ids);
+    return reply.error ? `${reply.ids.length} effacée(s), les autres restent : ${reply.error}` : null;
+  }
+
+  async #setResolved(note: NoteView, resolved: boolean): Promise<string | null> {
+    const reply = await ask(
+      resolved ? { type: "resolve", id: note.annotation.id, reply: "" } : { type: "reopen", id: note.annotation.id },
+    );
+    if (!reply.ok) return reply.error;
+    if (reply.type !== "state") return "réponse inattendue";
+    this.#upsert(reply.note);
     return null;
   }
 
@@ -559,7 +571,12 @@ class Overlay {
     head.append(el("strong", "", `Note ${annotation.seq}`), el("span", `state ${state}`, STATE_LABEL[state]));
     const comment = el("p", "card-comment", annotation.comment);
     const answer = resolution ? el("div", "card-reply") : null;
-    if (answer && resolution) answer.append(el("strong", "", "Réponse de Claude"), el("p", "", resolution.reply));
+    if (answer && resolution) {
+      answer.append(
+        el("strong", "", resolution.author.kind === "agent" ? "Réponse de Claude" : "Réglée par toi"),
+        el("p", "", resolution.reply),
+      );
+    }
     const preview = el("canvas", "preview");
     const { anchor } = annotation.mark;
     const target = el("p", "card-target");
@@ -570,8 +587,19 @@ class Overlay {
     const close = el("button", "ghost", "Fermer");
     close.type = "button";
     close.addEventListener("click", () => this.#closePanel());
+    const toggle = el("button", "ghost", resolution ? "Rouvrir" : "Marquer réglée");
+    toggle.type = "button";
+    toggle.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      const error = await this.#setResolved(note, !resolution);
+      if (error) {
+        toggle.textContent = `Non changé : ${error}`;
+        return;
+      }
+      this.#closePanel();
+    });
     const actions = el("div", "actions");
-    actions.append(close);
+    actions.append(toggle, close);
     panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
     this.#openPanel(panel, near);
     close.focus();

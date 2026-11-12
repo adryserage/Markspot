@@ -3,6 +3,7 @@
 // (version d'essai, hôte pas encore installé), les notes y restent et s'exportent.
 //
 // Clés : ann:<id> -> Annotation ; png:<id>:<kind> -> PNG en base64 ;
+//        res:<id> -> Resolution, quand la personne règle une note encore en file ;
 //        draft:<id> -> captures en attente du commentaire (le worker peut s'arrêter entre-temps).
 
 import {
@@ -12,6 +13,7 @@ import {
   type AnnotationId,
   type CaptureKind,
   type IsoTime,
+  type Resolution,
   type NewAnnotation,
 } from "../../src/core/model.ts";
 import { decodeTime } from "ulid";
@@ -19,6 +21,7 @@ import { buildExport, type ExportFile } from "../../src/core/export.ts";
 import type { CaptureResult } from "./capture.ts";
 
 const ANN = "ann:";
+const RES = "res:";
 const DRAFT = "draft:";
 const pngKey = (id: string, kind: CaptureKind) => `png:${id}:${kind}`;
 
@@ -83,7 +86,8 @@ export async function exportAll(now: Date): Promise<ExportFile> {
   const annotations = await allAnnotations();
   const keys = annotations.flatMap((a) => CAPTURE_KINDS.map((kind) => pngKey(a.id, kind)));
   const pngs = keys.length > 0 ? ((await chrome.storage.local.get(keys)) as Record<string, string>) : {};
-  return buildExport(annotations, (a, kind) => pngs[pngKey(a.id, kind)] ?? null, now);
+  const resolutions = await queuedResolutions();
+  return buildExport(annotations, (a, kind) => pngs[pngKey(a.id, kind)] ?? null, now, (a) => resolutions.get(a.id) ?? null);
 }
 
 /** Les deux images d'une note en file, ou null s'il en manque une. */
@@ -95,11 +99,27 @@ export async function outboxPngs(id: AnnotationId): Promise<Record<CaptureKind, 
   return zone && context ? { zone, context } : null;
 }
 
-/** Change le commentaire d'une note encore en file. null si elle n'y est plus. */
-export async function editQueued(id: AnnotationId, comment: string): Promise<Annotation | null> {
+/** Résolutions des notes en file, par identifiant. */
+export async function queuedResolutions(): Promise<Map<AnnotationId, Resolution>> {
+  const keys = (await chrome.storage.local.getKeys()).filter((k) => k.startsWith(RES));
+  const items = keys.length > 0 ? ((await chrome.storage.local.get(keys)) as Record<string, Resolution>) : {};
+  return new Map(Object.values(items).map((r) => [r.annotationId, r]));
+}
+
+/** La personne règle (resolution) ou rouvre (null) une note encore en file. false si elle n'y est plus. */
+export async function setQueuedResolution(id: AnnotationId, resolution: Resolution | null): Promise<boolean> {
+  if (!(await chrome.storage.local.get(ANN + id))[ANN + id]) return false;
+  if (resolution) await chrome.storage.local.set({ [RES + id]: resolution });
+  else await chrome.storage.local.remove(RES + id);
+  return true;
+}
+
+/** Change le commentaire d'une note encore en file. null si elle n'y est plus, "resolved" si elle est réglée. */
+export async function editQueued(id: AnnotationId, comment: string): Promise<Annotation | "resolved" | null> {
   const key = ANN + id;
   const note = (await chrome.storage.local.get(key))[key] as Annotation | undefined;
   if (!note) return null;
+  if ((await chrome.storage.local.get(RES + id))[RES + id]) return "resolved";
   const next: Annotation = { ...note, comment, revision: (note.revision ?? 0) + 1, updatedAt: new Date().toISOString() as IsoTime };
   await chrome.storage.local.set({ [key]: next });
   return next;
@@ -107,7 +127,7 @@ export async function editQueued(id: AnnotationId, comment: string): Promise<Ann
 
 /** Retire une note de la file une fois que l'hôte l'a écrite. */
 export async function removeFromOutbox(id: AnnotationId): Promise<void> {
-  await chrome.storage.local.remove([ANN + id, ...CAPTURE_KINDS.map((kind) => pngKey(id, kind))]);
+  await chrome.storage.local.remove([ANN + id, RES + id, ...CAPTURE_KINDS.map((kind) => pngKey(id, kind))]);
 }
 
 export async function capturePng(id: AnnotationId, kind: CaptureKind): Promise<string | null> {

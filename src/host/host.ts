@@ -4,7 +4,7 @@
 
 import type { Readable, Writable } from "node:stream";
 import { fromBase64 } from "../core/base64.ts";
-import type { NewAnnotation } from "../core/model.ts";
+import { LOCAL_USER, type NewAnnotation } from "../core/model.ts";
 import {
   MAX_CAPTURE_TO_EXTENSION,
   MAX_FRAME_TO_EXTENSION,
@@ -117,6 +117,24 @@ async function handle(
         ids: await store.clearNotes(message.ids, { includeOpen: message.includeOpen ?? false }),
       });
       return;
+    case "resolve": {
+      // L'auteur est la personne devant le navigateur : jamais lu dans le message.
+      const outcome = await store.resolve(message.id, message.reply, LOCAL_USER);
+      if (outcome.kind === "not_found") send({ type: "rejected", requestId: message.requestId, reason: "note not found" });
+      else send({ type: "resolved", requestId: message.requestId, thread: outcome.thread });
+      return;
+    }
+    case "reopen": {
+      const outcome = await store.reopen(message.id, message.resolvedAt);
+      if (outcome.kind === "reopened") send({ type: "reopened", requestId: message.requestId, thread: outcome.thread });
+      else
+        send({
+          type: "rejected",
+          requestId: message.requestId,
+          reason: outcome.kind === "changed" ? "resolution changed" : "note not found",
+        });
+      return;
+    }
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;
