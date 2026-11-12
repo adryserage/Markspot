@@ -14,8 +14,8 @@ const SCAN_MS = 2_000;
 
 export async function listen(options: { urlPrefix: string; timeoutSeconds: number; name: string }): Promise<number> {
   const config = await loadConfig();
-  const key = config.dispatchKey ?? null;
-  if (!key) {
+  const auth = config.dispatchKey && config.consumedFile ? { key: config.dispatchKey, consumedFile: config.consumedFile } : null;
+  if (!auth) {
     process.stderr.write("markspot: no dispatch key on this machine. Run markspot install (and copy the key from your other machine with markspot key).\n");
     return 1;
   }
@@ -53,7 +53,7 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
         await beat(config.dataDir, me);
         lastBeat = Date.now();
       }
-      const dispatch = await claimNext(config.dataDir, me, key);
+      const dispatch = await claimNext(config.dataDir, me, auth);
       if (dispatch) {
         const open = [];
         for (const [i, id] of dispatch.ids.entries()) {
@@ -62,7 +62,7 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
           if (thread && !thread.resolution && commentHash(thread.annotation.comment) === dispatch.hashes[i]) open.push(thread);
         }
         if (open.length === 0) {
-          await completeClaim(config.dataDir, dispatch, me); // déjà réglées entre-temps : on continue d'écouter
+          await completeClaim(config.dataDir, dispatch, me, auth); // déjà réglées entre-temps : on continue d'écouter
           continue;
         }
         const text = `${renderDispatch(dispatch.id, open)}\n`;
@@ -71,7 +71,7 @@ export async function listen(options: { urlPrefix: string; timeoutSeconds: numbe
           await releaseClaim(config.dataDir, dispatch, me);
           return 1;
         }
-        await completeClaim(config.dataDir, dispatch, me);
+        await completeClaim(config.dataDir, dispatch, me, auth);
         return 0;
       }
       await new Promise((r) => setTimeout(r, SCAN_MS));

@@ -10,7 +10,7 @@
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ulid } from "ulid";
 import type { AnnotationId } from "../core/model.ts";
 import { DIR_MODE, FILE_MODE, renameRetry } from "./store.ts";
@@ -39,6 +39,38 @@ export interface Dispatch {
 
 export const KEY_BYTES = 32;
 
+/** Ce qu'il faut pour prendre un envoi : la clé, et la liste locale des envois déjà transmis. */
+export interface DispatchAuth {
+  key: Buffer;
+  /** Hors du partage, à côté de la clé : un envoi transmis recopié plus tard n'est jamais repris. */
+  consumedFile: string;
+}
+
+/** Au-delà, un envoi signé est trop vieux (ou daté dans le futur) : une copie rejouée est refusée. */
+const MAX_DISPATCH_AGE_MS = 25 * 60 * 60 * 1000;
+
+async function consumedIds(file: string): Promise<Map<string, number>> {
+  try {
+    const raw = JSON.parse(await readFile(file, "utf8")) as unknown;
+    if (!Array.isArray(raw)) return new Map();
+    const cutoff = Date.now() - MAX_DISPATCH_AGE_MS;
+    return new Map(
+      raw.filter((e): e is [string, number] => Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "number" && e[1] > cutoff),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+async function markConsumed(file: string, id: string): Promise<void> {
+  const seen = await consumedIds(file);
+  seen.set(id, Date.now());
+  await mkdir(dirname(file), { recursive: true, mode: DIR_MODE });
+  const tmp = `${file}.tmp-${randomBytes(4).toString("hex")}`;
+  await writeFile(tmp, JSON.stringify([...seen]), { mode: FILE_MODE });
+  await renameRetry(tmp, file);
+}
+
 /** La clé lue dans son fichier (base64), ou null si elle manque ou n'a pas la bonne taille. */
 export async function readDispatchKey(file: string): Promise<Buffer | null> {
   try {
@@ -54,7 +86,7 @@ export const newDispatchKey = () => randomBytes(KEY_BYTES).toString("base64");
 export const commentHash = (comment: string) => createHash("sha256").update(comment, "utf8").digest("hex");
 
 /** Les champs signés, dans un ordre fixe, tels qu'ils sont écrits dans le fichier. */
-function signPayload(key: Buffer, d: { id: string; ids: string[]; url: string; at: string; to?: string; toHost?: string; hashes: string[] }): string {
+export function signPayload(key: Buffer, d: { id: string; ids: string[]; url: string; at: string; to?: string; toHost?: string; hashes: string[] }): string {
   const payload = JSON.stringify(["markspot-dispatch-v1", d.id, d.ids, d.url, d.at, d.to ?? null, d.toHost ?? null, d.hashes]);
   return createHmac("sha256", key).update(payload, "utf8").digest("base64url");
 }
@@ -146,6 +178,8 @@ function asDispatch(raw: unknown, key: Buffer | null): Dispatch | null {
   if (typeof d.at !== "string" || !Array.isArray(d.hashes) || d.hashes.length !== d.ids.length) return null;
   // Vérifiée sur les champs bruts, avant toute normalisation.
   if (!key || !signedBy(key, d)) return null;
+  const signedAt = Date.parse(d.at);
+  if (!Number.isFinite(signedAt) || Math.abs(Date.now() - signedAt) > MAX_DISPATCH_AGE_MS) return null;
   const to = typeof d.to === "string" && d.to !== "" ? cleanName(d.to) : undefined;
   const toHost = to && typeof d.toHost === "string" && d.toHost !== "" ? cleanName(d.toHost) : undefined;
   return {
@@ -243,8 +277,10 @@ export async function removeBeat(dataDir: string, id: string): Promise<void> {
  * Réclame le prochain envoi pour cette écoute, ou null. Seule l'écoute choisie le prend
  * pendant GRACE_MS ; ensuite, toute écoute dont le préfixe correspond.
  */
-export async function claimNext(dataDir: string, me: Listener, key: Buffer | null): Promise<Dispatch | null> {
-  if (!key) return null; // sans clé, aucun envoi ne peut être vérifié
+export async function claimNext(dataDir: string, me: Listener, auth: DispatchAuth | null): Promise<Dispatch | null> {
+  if (!auth) return null; // sans clé, aucun envoi ne peut être vérifié
+  const { key } = auth;
+  const consumed = await consumedIds(auth.consumedFile);
   const paths = dispatchPaths(dataDir);
   await privateDir(paths.dispatch);
   await privateDir(paths.claimed);
@@ -258,6 +294,7 @@ export async function claimNext(dataDir: string, me: Listener, key: Buffer | nul
     const file = join(paths.dispatch, name);
     const dispatch = asDispatch(await readJsonFile(file), key); // non signé : laissé en place, la purge le retire
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
+    if (consumed.has(dispatch.id)) continue; // déjà transmis par ce poste : une copie rejouée
     // Envoi visé : seules les écoutes de ce nom, même après le délai de grâce.
     if (dispatch.to !== undefined && dispatch.to !== me.name) continue;
     if (dispatch.toHost !== undefined && dispatch.toHost !== cleanName(me.host)) continue;
@@ -291,12 +328,17 @@ export async function claimNext(dataDir: string, me: Listener, key: Buffer | nul
  * permanence ne lance claimNext (qui écrit sur le partage) que s'il y a du travail.
  */
 export async function hasWork(dataDir: string): Promise<boolean> {
+  return (await pendingWork(dataDir)) !== "";
+}
+
+/** Les envois en attente ou réclamés, par nom : vide s'il n'y en a pas. Lecture seule. */
+export async function pendingWork(dataDir: string): Promise<string> {
   const paths = dispatchPaths(dataDir);
+  const names: string[] = [];
   for (const dir of [paths.dispatch, paths.claimed]) {
-    const names = await readdir(dir).catch(() => [] as string[]);
-    if (names.some((n) => n.endsWith(".json"))) return true;
+    for (const n of await readdir(dir).catch(() => [] as string[])) if (n.endsWith(".json")) names.push(n);
   }
-  return false;
+  return names.sort().join("\n");
 }
 
 /** Une écoute tuée entre la réclamation et la sortie ne doit pas perdre l'envoi. */
@@ -316,7 +358,8 @@ async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>
 }
 
 /** L'envoi a été transmis à la session : il disparaît, il ne peut plus revenir dans la file. */
-export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Listener): Promise<void> {
+export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Listener, auth: DispatchAuth): Promise<void> {
+  await markConsumed(auth.consumedFile, dispatch.id);
   await rm(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), { force: true });
 }
 

@@ -54,7 +54,7 @@ async function setup(id: string) {
     dataDir,
     store: await openAgentStore(config),
     name: "projet",
-    dispatchKey: config.dispatchKey,
+    auth: { key: config.dispatchKey, consumedFile: join(dataDir, "consumed.json") },
     push: async (content) => void pushed.push(content),
     ackMs: 400,
     scanMs: 30,
