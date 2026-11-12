@@ -165,6 +165,21 @@ async function notesForPage(url: string): Promise<NoteView[]> {
   return [...fromHost, ...queued].sort((a, b) => a.annotation.seq - b.annotation.seq);
 }
 
+// ----------------------------------------------------- Envoyer à Claude
+
+/** Le projet qui reçoit les envois d'un site, gardé par origine (jamais une valeur venue de la page). */
+const targetKey = (url: string) => `target:${new URL(url).origin}`;
+
+async function chosenTarget(url: string): Promise<string | null> {
+  const key = targetKey(url);
+  return ((await chrome.storage.local.get(key))[key] as string | undefined) ?? null;
+}
+
+async function saveTarget(url: string, name: string | null): Promise<void> {
+  if (name) await chrome.storage.local.set({ [targetKey(url)]: name.slice(0, 80) });
+  else await chrome.storage.local.remove(targetKey(url));
+}
+
 // ------------------------------------------------------------------ overlay
 
 async function injectOverlay(tab: chrome.tabs.Tab | undefined): Promise<void> {
@@ -277,10 +292,26 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         return thread && !thread.resolution && pageKeyOf(thread.annotation.page.url) === page;
       });
       if (ids.length === 0) return { ok: false, error: "aucune note ouverte reçue par le programme local" };
-      const reply = await host.request({ type: "send", ids, url: sender.url });
-      if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local" };
-      return { ok: true, type: "sent", count: ids.length, listeners: reply.listeners };
+      const to = await chosenTarget(sender.url);
+      const reply = await host.request({ type: "send", ids, url: sender.url, ...(to ? { to } : {}) });
+      if (reply.type === "choose") return { ok: true, type: "choose", listeners: reply.listeners };
+      if (reply.type === "rejected" && reply.reason === "nobody listens") {
+        return { ok: false, error: "aucune session n'écoute : dis « écoute mes annotations » dans la session du projet, puis renvoie" };
+      }
+      if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local (mets-le à jour ?)" };
+      await saveTarget(sender.url, reply.to);
+      return { ok: true, type: "sent", count: ids.length, to: reply.to, listening: reply.listening };
     }
+    case "targets": {
+      if (!__MARKSPOT_NATIVE__ || !sender.url) return { ok: true, type: "targets", listeners: [], chosen: null };
+      const reply = await host.request({ type: "listeners", url: sender.url }).catch(() => null);
+      const listeners = reply?.type === "listeners" ? reply.listeners : [];
+      return { ok: true, type: "targets", listeners, chosen: await chosenTarget(sender.url) };
+    }
+    case "setTarget":
+      if (!sender.url) return { ok: false, error: "page inconnue" };
+      await saveTarget(sender.url, request.name);
+      return { ok: true, type: "done" };
     case "openExport":
       await openExportPage(sender.tab);
       return { ok: true, type: "done" };

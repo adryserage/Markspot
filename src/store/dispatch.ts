@@ -21,15 +21,36 @@ export interface Dispatch {
   /** Adresse de la page d'où l'envoi est parti. */
   url: string;
   at: string;
+  /** Nom du projet visé : seules les écoutes de ce nom le prennent. Absent dans les anciens envois. */
+  to?: string;
 }
 
 export interface Listener {
   id: string;
+  /** Nom du projet de la session (par défaut le nom de son dossier). */
+  name: string;
   /** Préfixe d'adresse écouté ; vide = toutes les pages. */
   urlPrefix: string;
   startedAt: string;
   pid: number;
   host: string;
+  /** Dossier de la session : reste dans le battement, jamais rendu à la page. */
+  cwd?: string;
+}
+
+/** Ce que la page voit d'une écoute. */
+export interface PublicListener {
+  name: string;
+  host: string;
+  urlPrefix: string;
+  since: string;
+}
+
+export const NAME_MAX = 80;
+
+/** Nom de projet affichable : sans caractère de contrôle, borné. */
+export function cleanName(raw: string): string {
+  return raw.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, NAME_MAX);
 }
 
 const LISTENER_ALIVE_MS = 30_000;
@@ -75,7 +96,21 @@ function asDispatch(raw: unknown): Dispatch | null {
   if (!d || typeof d.id !== "string" || !ULID.test(d.id) || typeof d.url !== "string") return null;
   if (!Array.isArray(d.ids) || d.ids.length === 0 || d.ids.length > 500) return null;
   if (!d.ids.every((id) => typeof id === "string" && ULID.test(id))) return null;
-  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? "") };
+  const to = typeof d.to === "string" && d.to !== "" ? cleanName(d.to) : undefined;
+  return { id: d.id, ids: d.ids, url: d.url.slice(0, 2000), at: String(d.at ?? ""), ...(to ? { to } : {}) };
+}
+
+function asListener(raw: unknown): Listener | null {
+  const l = raw as Partial<Listener> | null;
+  if (!l || typeof l.id !== "string" || typeof l.startedAt !== "string") return null;
+  return {
+    id: l.id,
+    name: typeof l.name === "string" ? cleanName(l.name) : "",
+    urlPrefix: typeof l.urlPrefix === "string" ? l.urlPrefix : "",
+    startedAt: l.startedAt,
+    pid: typeof l.pid === "number" ? l.pid : 0,
+    host: typeof l.host === "string" ? l.host.slice(0, 80) : "",
+  };
 }
 
 /** Envois réclamés par une écoute morte depuis plus d'une minute : remis dans la file. */
@@ -90,10 +125,10 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
 }
 
 /** Écrit un envoi entier ou rien : une écoute ne lit jamais un JSON à moitié écrit. */
-export async function writeDispatch(dataDir: string, ids: AnnotationId[], url: string): Promise<Dispatch> {
+export async function writeDispatch(dataDir: string, ids: AnnotationId[], url: string, to: string): Promise<Dispatch> {
   const paths = dispatchPaths(dataDir);
   await mkdir(paths.dispatch, { recursive: true });
-  const dispatch: Dispatch = { id: ulid(), ids, url, at: new Date().toISOString() };
+  const dispatch: Dispatch = { id: ulid(), ids, url, at: new Date().toISOString(), to: cleanName(to) };
   const tmp = join(paths.dispatch, `.tmp-${dispatch.id}`);
   await writeFile(tmp, JSON.stringify(dispatch));
   await renameRetry(tmp, join(paths.dispatch, `${dispatch.id}.json`));
@@ -112,7 +147,7 @@ export async function liveListeners(dataDir: string): Promise<Listener[]> {
     } catch {
       continue;
     }
-    const listener = await readJsonFile<Listener>(file);
+    const listener = asListener(await readJsonFile(file));
     if (listener) alive.push(listener);
   }
   return alive;
@@ -147,13 +182,16 @@ export async function claimNext(dataDir: string, me: Listener): Promise<Dispatch
     const file = join(paths.dispatch, name);
     const dispatch = asDispatch(await readJsonFile(file));
     if (!dispatch || !matches(me.urlPrefix, dispatch.url)) continue;
+    // Envoi visé : seules les écoutes de ce nom, même après le délai de grâce.
+    if (dispatch.to !== undefined && dispatch.to !== me.name) continue;
     let age: number;
     try {
       age = now - (await stat(file)).mtimeMs;
     } catch {
       continue;
     }
-    if (chooseListener([...others, me], dispatch.url)?.id !== me.id && age < GRACE_MS) continue;
+    const group = dispatch.to !== undefined ? others.filter((l) => l.name === dispatch.to) : others;
+    if (chooseListener([...group, me], dispatch.url)?.id !== me.id && age < GRACE_MS) continue;
     const claimed = join(paths.claimed, `${dispatch.id}-${me.id}.json`);
     try {
       await renameRetry(file, claimed);
@@ -188,6 +226,14 @@ async function requeueAbandoned(dataDir: string, now: number, alive: Set<string>
 /** L'envoi a été transmis à la session : il disparaît, il ne peut plus revenir dans la file. */
 export async function completeClaim(dataDir: string, dispatch: Dispatch, me: Listener): Promise<void> {
   await rm(join(dispatchPaths(dataDir).claimed, `${dispatch.id}-${me.id}.json`), { force: true });
+}
+
+/** Les écoutes vivantes pour cette adresse, telles que la page peut les voir. */
+export async function publicListeners(dataDir: string, url: string): Promise<PublicListener[]> {
+  return (await liveListeners(dataDir))
+    .filter((l) => matches(l.urlPrefix, url))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.startedAt.localeCompare(b.startedAt))
+    .map((l) => ({ name: l.name, host: l.host, urlPrefix: l.urlPrefix, since: l.startedAt }));
 }
 
 /** Remet un envoi réclamé dans la file (l'écoute n'a pas pu le transmettre). */

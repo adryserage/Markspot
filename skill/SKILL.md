@@ -23,7 +23,7 @@ Les notes viennent de l'extension Markspot : sur une page, la personne appuie su
 Quand la personne dit « écoute mes annotations » (ou « reste à l'écoute »), elle enverra ses notes avec le bouton « Envoyer à Claude » de l'extension.
 
 1. Règle d'abord les notes déjà ouvertes, comme ci-dessus.
-2. Lance la commande d'écoute en tâche de fond (outil Bash avec `run_in_background`) : `~/.local/share/markspot/bin/markspot listen` sous Linux, `~/Library/Application Support/markspot/bin/markspot listen` sous macOS, `%LOCALAPPDATA%\markspot\bin\markspot.bat listen` sous Windows. Les instructions du serveur MCP `markspot` donnent le chemin exact. Ajoute `--url <adresse>` pour n'écouter qu'un site. L'attente ne coûte rien : tu es réveillé seulement quand la commande se termine.
+2. Lance la commande d'écoute en tâche de fond (outil Bash avec `run_in_background`) : `~/.local/share/markspot/bin/markspot listen` sous Linux, `~/Library/Application Support/markspot/bin/markspot listen` sous macOS, `%LOCALAPPDATA%\markspot\bin\markspot.bat listen` sous Windows. Les instructions du serveur MCP `markspot` donnent le chemin exact. Ajoute toujours `--name <projet>` avec le nom du projet de la session (le nom de son dossier, par exemple `--name adryanserage.ca`) : c'est le nom que la personne choisit dans « Envoyer à » sur la page. Ajoute `--url <adresse>` pour n'écouter qu'un site. L'attente ne coûte rien : tu es réveillé seulement quand la commande se termine.
 3. À la notification de fin :
    - code 0 : la sortie liste les notes envoyées. Relance d'abord l'écoute (étape 2), puis règle chaque note (étapes 2.1 à 2.5 ci-dessus) ;
    - code 2 : une heure sans envoi. Relance l'écoute si la personne travaille encore, sinon arrête ;

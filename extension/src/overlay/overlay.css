@@ -638,3 +638,28 @@ button.danger:hover {
 .quick-button.send:hover:not(:disabled) {
   background: #2a2f3d;
 }
+
+/* « Envoyer à » : la session Claude qui reçoit les envois de ce site. */
+.menu-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.menu-target-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.3 var(--font);
+}
+
+.menu-target-select:focus-visible {
+  outline: 3px solid var(--marker);
+  outline-offset: 1px;
+}
