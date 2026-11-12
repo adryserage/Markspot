@@ -31,7 +31,7 @@ Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » 
 4. Dans Claude Code, tu demandes « règle mes annotations ». Claude lit chaque note avec ses images, trouve le fichier source, corrige et vérifie.
 5. Sur la page, la pastille passe à « réglée » et affiche la réponse de Claude.
 
-Pendant le mode annotation, le menu en haut à droite liste les notes de la page : un clic va à la note, « Modifier » change un commentaire, « Effacer les notes réglées » retire celles que Claude a déjà réglées, et « Tout effacer sur cette page » retire toutes les notes de la page après confirmation.
+Pendant le mode annotation, le menu en haut à droite liste les notes de la page : un clic va à la note, « Modifier » change un commentaire, « Effacer les notes réglées » retire celles que Claude a déjà réglées, et « Tout effacer sur cette page » retire toutes les notes de la page après confirmation. « Marquer réglée » et « Rouvrir » changent l'état d'une note à la main ; l'export dit quelles notes sont réglées.
 
 Une note « En attente » n'a pas encore été reçue par le programme local : c'est le cas de toutes les notes tant que Markspot n'est pas installé sur le poste (version d'essai). Elles partent toutes seules à la première connexion.
 

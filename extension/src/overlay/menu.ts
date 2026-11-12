@@ -10,11 +10,14 @@ export interface MenuActions {
   edit(note: NoteView, comment: string): Promise<string | null>;
   clearResolved(notes: NoteView[]): Promise<string | null>;
   clearAll(notes: NoteView[]): Promise<string | null>;
+  /** Marque la note réglée (true) ou la rouvre (false). */
+  setResolved(note: NoteView, resolved: boolean): Promise<string | null>;
 }
 
 export type NoteState = "pending" | "open" | "resolved";
 export const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
-export const stateOf = (note: NoteView): NoteState => (note.pending ? "pending" : note.resolution ? "resolved" : "open");
+/** Une note réglée s'affiche réglée, même si elle attend encore le programme local. */
+export const stateOf = (note: NoteView): NoteState => (note.resolution ? "resolved" : note.pending ? "pending" : "open");
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -148,6 +151,17 @@ export class NotesMenu {
     go.addEventListener("click", () => this.actions.goTo(note));
     const side = el("div", "menu-side");
     side.append(el("span", `state ${state}`, STATE_LABEL[state]));
+    const toggle = el("button", "ghost small", state === "resolved" ? "Rouvrir" : "Marquer réglée");
+    toggle.type = "button";
+    toggle.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      toggle.disabled = true;
+      const error = await this.actions.setResolved(note, state !== "resolved");
+      toggle.disabled = false;
+      this.#message.textContent = error ? `Non changé : ${error}` : "";
+      this.#message.classList.toggle("error", Boolean(error));
+    });
+    side.append(toggle);
     if (state !== "resolved") {
       const edit = el("button", "ghost small", "Modifier");
       edit.type = "button";

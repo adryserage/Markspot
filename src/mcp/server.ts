@@ -149,7 +149,7 @@ export function createServer(store: AgentStore, version: string): McpServer {
             content: [
               {
                 type: "text",
-                text: `Note ${outcome.thread.annotation.seq} was already resolved by another session with: ${outcome.thread.resolution?.reply ?? ""}`,
+                text: `Note ${outcome.thread.annotation.seq} was already resolved ${outcome.thread.resolution?.author.kind === "user" ? "by the user" : "by another session"} with: ${outcome.thread.resolution?.reply ?? ""}`,
               },
             ],
           };

@@ -13,6 +13,7 @@ import {
   redactUrl,
   type AnnotationId,
   type IsoTime,
+  type Resolution,
   type Thread,
 } from "../../src/core/model.ts";
 import { sanitizeStrokes } from "../../src/core/drawing.ts";
@@ -25,6 +26,8 @@ import {
   discardDraft,
   editQueued,
   exportAll,
+  queuedResolutions,
+  setQueuedResolution,
   outboxPngs,
   purgeOldDrafts,
   putDraft,
@@ -70,15 +73,24 @@ let flushing: Promise<void> = Promise.resolve();
 function flushOutbox(): Promise<void> {
   flushing = flushing.then(async () => {
     if (!host.connected) return;
+    const resolutions = await queuedResolutions();
     for (const note of await allAnnotations()) {
       const pngs = await outboxPngs(note.id);
       if (!pngs) continue;
       const { schemaVersion: _version, seq: _seq, ...annotation } = note;
       const reply = await host.request({ type: "create", annotation, pngs }).catch(() => null);
       if (reply?.type !== "created") return; // hôte parti ou note refusée : on réessaiera
-      threads.set(reply.thread.annotation.id, reply.thread);
+      let thread = reply.thread;
+      // Réglée à la main pendant qu'elle était en file : la résolution part aussi. Un refus
+      // (hôte plus ancien) n'arrête pas l'envoi des notes suivantes.
+      const queuedResolution = resolutions.get(note.id);
+      if (queuedResolution && !thread.resolution) {
+        const resolved = await host.request({ type: "resolve", id: note.id, reply: queuedResolution.reply }).catch(() => null);
+        if (resolved?.type === "resolved") thread = resolved.thread;
+      }
+      threads.set(thread.annotation.id, thread);
       await removeFromOutbox(note.id);
-      broadcast({ type: "note", note: hostView(reply.thread) }, reply.thread.annotation.page.url);
+      broadcast({ type: "note", note: hostView(thread) }, thread.annotation.page.url);
     }
   });
   return flushing;
@@ -94,25 +106,30 @@ host.onConnected(async () => {
  * Retire des notes de cette page, et seulement de celle-ci. Passe après l'envoi de la file en
  * cours : sinon une note en route serait recréée par l'hôte juste après son retrait.
  */
-function clearOnPage(page: string, ids: AnnotationId[], includeOpen: boolean): Promise<AnnotationId[]> {
+function clearOnPage(
+  page: string,
+  ids: AnnotationId[],
+  includeOpen: boolean,
+): Promise<{ ids: AnnotationId[]; error?: string }> {
   const run = flushing.then(async () => {
     const wanted = new Set(ids);
     const removed: AnnotationId[] = [];
-    if (includeOpen) {
-      for (const note of await allAnnotations()) {
-        if (!wanted.has(note.id) || pageKeyOf(note.page.url) !== page) continue;
-        await removeFromOutbox(note.id);
-        removed.push(note.id);
-        broadcast({ type: "removed", id: note.id }, note.page.url);
-      }
+    const resolutions = await queuedResolutions();
+    for (const note of await allAnnotations()) {
+      if (!wanted.has(note.id) || pageKeyOf(note.page.url) !== page) continue;
+      if (!includeOpen && !resolutions.has(note.id)) continue;
+      await removeFromOutbox(note.id);
+      removed.push(note.id);
+      broadcast({ type: "removed", id: note.id }, note.page.url);
     }
     const onHost = ids.filter((id) => {
       const thread = threads.get(id);
       return thread && pageKeyOf(thread.annotation.page.url) === page && (includeOpen || thread.resolution);
     });
     if (onHost.length > 0) {
-      const reply = await host.request({ type: "clear", ids: onHost, includeOpen });
-      if (reply.type !== "cleared") throw new Error("refusé par le programme local");
+      const reply = await host.request({ type: "clear", ids: onHost, includeOpen }).catch(() => null);
+      // Les notes déjà retirées de la file le restent : on dit lesquelles, avec l'erreur.
+      if (reply?.type !== "cleared") return { ids: removed, error: "le programme local n'a pas répondu" };
       for (const id of reply.ids) {
         const known = threads.get(id);
         threads.delete(id);
@@ -120,7 +137,7 @@ function clearOnPage(page: string, ids: AnnotationId[], includeOpen: boolean): P
         if (known) broadcast({ type: "removed", id }, known.annotation.page.url);
       }
     }
-    return removed;
+    return { ids: removed };
   });
   flushing = run.then(
     () => undefined,
@@ -129,12 +146,22 @@ function clearOnPage(page: string, ids: AnnotationId[], includeOpen: boolean): P
   return run;
 }
 
+/** Vue d'une note encore en file, avec sa résolution locale. Diffusée aux onglets de sa page. */
+async function queuedView(id: AnnotationId): Promise<NoteView> {
+  const annotation = (await allAnnotations()).find((a) => a.id === id);
+  if (!annotation) throw new Error("note introuvable");
+  const note: NoteView = { annotation, resolution: (await queuedResolutions()).get(id) ?? null, pending: true };
+  broadcast({ type: "note", note }, annotation.page.url);
+  return note;
+}
+
 async function notesForPage(url: string): Promise<NoteView[]> {
   const key = pageKeyOf(url);
   const fromHost = [...threads.values()].filter((t) => pageKeyOf(t.annotation.page.url) === key).map(hostView);
+  const resolutions = await queuedResolutions();
   const queued = (await allAnnotations())
     .filter((a) => pageKeyOf(a.page.url) === key && !threads.has(a.id))
-    .map((annotation): NoteView => ({ annotation, resolution: null, pending: true }));
+    .map((annotation): NoteView => ({ annotation, resolution: resolutions.get(annotation.id) ?? null, pending: true }));
   return [...fromHost, ...queued].sort((a, b) => a.annotation.seq - b.annotation.seq);
 }
 
@@ -193,6 +220,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
     }
     case "edit": {
       const queued = await editQueued(request.id, request.comment.slice(0, 4000));
+      if (queued === "resolved") return { ok: false, error: "note réglée : rouvre-la d'abord" };
       if (queued) {
         const note: NoteView = { annotation: queued, resolution: null, pending: true };
         broadcast({ type: "note", note }, queued.page.url);
@@ -208,7 +236,36 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
     }
     case "clear": {
       if (!sender.url) return { ok: false, error: "page inconnue" };
-      return { ok: true, type: "cleared", ids: await clearOnPage(pageKeyOf(sender.url), request.ids, request.includeOpen) };
+      const result = await clearOnPage(pageKeyOf(sender.url), request.ids, request.includeOpen);
+      return { ok: true, type: "cleared", ...result };
+    }
+    case "resolve": {
+      const reply = request.reply.trim().slice(0, 4000) || "Réglée à la main.";
+      const resolution: Resolution = {
+        schemaVersion: 1,
+        annotationId: request.id,
+        resolvedAt: new Date().toISOString() as IsoTime,
+        author: LOCAL_USER,
+        reply,
+      };
+      if (await setQueuedResolution(request.id, resolution)) return { ok: true, type: "state", note: await queuedView(request.id) };
+      const answer = await host.request({ type: "resolve", id: request.id, reply });
+      if (answer.type !== "resolved") return { ok: false, error: "note introuvable" };
+      threads.set(answer.thread.annotation.id, answer.thread);
+      broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
+      return { ok: true, type: "state", note: hostView(answer.thread) };
+    }
+    case "reopen": {
+      if (await setQueuedResolution(request.id, null)) return { ok: true, type: "state", note: await queuedView(request.id) };
+      const known = threads.get(request.id);
+      if (!known?.resolution) return { ok: false, error: "note déjà ouverte" };
+      const answer = await host.request({ type: "reopen", id: request.id, resolvedAt: known.resolution.resolvedAt });
+      if (answer.type !== "reopened") {
+        return { ok: false, error: answer.type === "rejected" && answer.reason === "resolution changed" ? "Claude vient de répondre : relis la note" : "note introuvable" };
+      }
+      threads.set(answer.thread.annotation.id, answer.thread);
+      broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
+      return { ok: true, type: "state", note: hostView(answer.thread) };
     }
     case "discard":
       await discardDraft(request.draftId);
