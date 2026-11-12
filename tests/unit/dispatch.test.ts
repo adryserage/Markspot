@@ -16,6 +16,7 @@ import {
   hasWork,
   liveListeners,
   purgeDispatch,
+  signPayload,
   writeDispatch,
   type Listener,
 } from "../../src/store/dispatch.ts";
@@ -40,6 +41,8 @@ const listener = (id: string, urlPrefix = "", startedAt = "2026-11-12T08:00:00.0
 });
 const ids = ["01JD8000000000000000000001" as AnnotationId];
 const KEY = randomBytes(32);
+const AUTH = { key: KEY, consumedFile: join(tmpdir(), `markspot-consumed-${process.pid}-${Date.now()}.json`) };
+after(async () => rm(AUTH.consumedFile, { force: true }));
 const HASHES = ["h"];
 
 test("chooseListener prefers the longest matching prefix, then the oldest", () => {
@@ -65,7 +68,7 @@ test("two listeners claiming at once: exactly one gets the dispatch", async () =
   const file = (await readdir(dispatchPaths(dir).dispatch)).find((n) => n.endsWith(".json"))!;
   const old = new Date(Date.now() - 60_000);
   await utimes(join(dispatchPaths(dir).dispatch, file), old, old);
-  const results = await Promise.all([claimNext(dir, a, KEY), claimNext(dir, b, KEY)]);
+  const results = await Promise.all([claimNext(dir, a, AUTH), claimNext(dir, b, AUTH)]);
   assert.equal(results.filter(Boolean).length, 1);
   assert.deepEqual(results.find(Boolean)?.ids, ids);
 });
@@ -77,9 +80,9 @@ test("a fresh dispatch waits for the chosen listener; one that does not match ne
   const other = listener("other", "https://autre.test");
   for (const l of [general, site, other]) await beat(dir, l);
   await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/prix", to: "projet", hashes: HASHES });
-  assert.equal(await claimNext(dir, other, KEY), null);
-  assert.equal(await claimNext(dir, general, KEY), null, "inside the grace period, only the chosen listener takes it");
-  assert.ok(await claimNext(dir, site, KEY));
+  assert.equal(await claimNext(dir, other, AUTH), null);
+  assert.equal(await claimNext(dir, general, AUTH), null, "inside the grace period, only the chosen listener takes it");
+  assert.ok(await claimNext(dir, site, AUTH));
 });
 
 test("a dispatch sent while nobody listens waits for the next listener", async () => {
@@ -87,7 +90,7 @@ test("a dispatch sent while nobody listens waits for the next listener", async (
   await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/prix", to: "projet", hashes: HASHES });
   const late = listener("late");
   await beat(dir, late);
-  assert.ok(await claimNext(dir, late, KEY));
+  assert.ok(await claimNext(dir, late, AUTH));
 });
 
 test("a malformed dispatch on a shared folder is ignored, a claim left by a dead listener comes back", async () => {
@@ -97,7 +100,7 @@ test("a malformed dispatch on a shared folder is ignored, a claim left by a dead
   await writeFile(join(paths.dispatch, "01JD8000000000000000000099.json"), JSON.stringify({ id: "../x", ids: "nope", url: 1 }));
   const me = listener("01JD8000000000000000000077");
   await beat(dir, me);
-  assert.equal(await claimNext(dir, me, KEY), null);
+  assert.equal(await claimNext(dir, me, AUTH), null);
   // Envoi réclamé par une écoute morte il y a deux minutes : repris par la suivante.
   await mkdir(paths.claimed, { recursive: true });
   const lost = await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
@@ -107,7 +110,7 @@ test("a malformed dispatch on a shared folder is ignored, a claim left by a dead
   await utimes(claimedFile, old, old);
   // Le fichier mal formé est retiré : la file est vide, la réclamation abandonnée doit quand même revenir.
   await rm(join(paths.dispatch, "01JD8000000000000000000099.json"));
-  const back = (await claimNext(dir, me, KEY)) ?? (await claimNext(dir, me, KEY));
+  const back = (await claimNext(dir, me, AUTH)) ?? (await claimNext(dir, me, AUTH));
   assert.equal(back?.id, lost.id);
 });
 
@@ -120,14 +123,14 @@ test("a delivered dispatch never comes back, a fresh claim of a dead listener wa
   for (const n of await readdir(dispatchPaths(dir).dispatch)) {
     if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
   }
-  const got = await claimNext(dir, a, KEY);
+  const got = await claimNext(dir, a, AUTH);
   assert.ok(got);
   // L'écoute a est morte juste après la réclamation : sa réclamation est récente, elle reste.
   const b = listener("01JD8000000000000000000022");
   await beat(dir, b);
-  assert.equal(await claimNext(dir, b, KEY), null);
-  assert.equal(await claimNext(dir, b, KEY), null);
-  await completeClaim(dir, got!, a);
+  assert.equal(await claimNext(dir, b, AUTH), null);
+  assert.equal(await claimNext(dir, b, AUTH), null);
+  await completeClaim(dir, got!, a, AUTH);
   assert.deepEqual(await readdir(dispatchPaths(dir).claimed), []);
 });
 
@@ -142,8 +145,8 @@ test("a dispatch aimed at a project is taken only by that project, even after th
   for (const n of await readdir(dispatchPaths(dir).dispatch)) {
     if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
   }
-  assert.equal(await claimNext(dir, subv, KEY), null, "another project never takes it");
-  assert.equal((await claimNext(dir, markspot, KEY))?.to, "Markspot");
+  assert.equal(await claimNext(dir, subv, AUTH), null, "another project never takes it");
+  assert.equal((await claimNext(dir, markspot, AUTH))?.to, "Markspot");
 });
 
 test("an aimed dispatch waits while its project restarts, then the new listener of that name takes it", async () => {
@@ -151,7 +154,7 @@ test("an aimed dispatch waits while its project restarts, then the new listener 
   await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "Markspot", hashes: HASHES });
   const restarted = listener("01JD8000000000000000000041", "", "2026-11-12T10:00:00.000Z", "Markspot");
   await beat(dir, restarted);
-  assert.equal((await claimNext(dir, restarted, KEY))?.to, "Markspot");
+  assert.equal((await claimNext(dir, restarted, AUTH))?.to, "Markspot");
 });
 
 test("hasWork sees a waiting dispatch and a claimed one, nothing else", async () => {
@@ -162,7 +165,7 @@ test("hasWork sees a waiting dispatch and a claimed one, nothing else", async ()
   assert.equal(await hasWork(dir), false, "a heartbeat is not work");
   await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
   assert.equal(await hasWork(dir), true);
-  assert.ok(await claimNext(dir, me, KEY));
+  assert.ok(await claimNext(dir, me, AUTH));
   assert.equal(await hasWork(dir), true, "a claim may come back if its listener dies");
 });
 
@@ -188,8 +191,8 @@ test("a dispatch aimed at a project on one machine is never taken by the same na
   for (const n of await readdir(dispatchPaths(dir).dispatch)) {
     if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
   }
-  assert.equal(await claimNext(dir, linux, KEY), null, "same name, other machine: never, even after the grace period");
-  assert.equal((await claimNext(dir, windows, KEY))?.toHost, "AEGISZ2");
+  assert.equal(await claimNext(dir, linux, AUTH), null, "same name, other machine: never, even after the grace period");
+  assert.equal((await claimNext(dir, windows, AUTH))?.toHost, "AEGISZ2");
 });
 
 test("only a dispatch signed with this key is taken: none without key, a forged or altered one stays unclaimed", async () => {
@@ -198,17 +201,35 @@ test("only a dispatch signed with this key is taken: none without key, a forged 
   await beat(dir, me);
   const sent = await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
   assert.equal(await claimNext(dir, me, null), null, "no key on this machine: nothing is taken");
-  assert.equal(await claimNext(dir, me, randomBytes(32)), null, "another key: nothing is taken");
+  assert.equal(await claimNext(dir, me, { key: randomBytes(32), consumedFile: AUTH.consumedFile }), null, "another key: nothing is taken");
   // Un écrivain du partage change l'adresse d'un envoi signé, ou en dépose un sans signature.
   const file = join(dispatchPaths(dir).dispatch, `${sent.id}.json`);
   const raw = JSON.parse(await readFileText(file));
   await writeFile(file, JSON.stringify({ ...raw, url: "http://evil.test/" }));
   await writeFile(join(dispatchPaths(dir).dispatch, "01JD8000000000000000000092.json"), JSON.stringify({ ...raw, id: "01JD8000000000000000000092", sig: undefined }));
-  assert.equal(await claimNext(dir, me, KEY), null);
+  assert.equal(await claimNext(dir, me, AUTH), null);
   assert.equal((await readdir(dispatchPaths(dir).dispatch)).filter((n) => n.endsWith(".json")).length, 2, "refused dispatches stay for the purge");
   await writeFile(file, JSON.stringify(raw));
-  assert.equal((await claimNext(dir, me, KEY))?.id, sent.id, "the untouched signed dispatch is taken");
+  assert.equal((await claimNext(dir, me, AUTH))?.id, sent.id, "the untouched signed dispatch is taken");
   if (process.platform !== "win32") {
     assert.equal((await stat(dispatchPaths(dir).dispatch)).mode & 0o777, 0o700, "the dispatch folder is private");
   }
+});
+
+test("a delivered dispatch copied back later is refused, and so is one signed too long ago", async () => {
+  const dir = await dataDir();
+  const me = listener("01JD8000000000000000000093");
+  await beat(dir, me);
+  const sent = await writeDispatch(dir, KEY, { ids, url: "http://localhost:3000/", to: "projet", hashes: HASHES });
+  const copy = await readFileText(join(dispatchPaths(dir).dispatch, `${sent.id}.json`));
+  const got = await claimNext(dir, me, AUTH);
+  assert.equal(got?.id, sent.id);
+  await completeClaim(dir, got!, me, AUTH);
+  await writeFile(join(dispatchPaths(dir).dispatch, `${sent.id}.json`), copy); // rejoué par un écrivain du partage
+  assert.equal(await claimNext(dir, me, AUTH), null, "already delivered by this machine");
+  // Un envoi bien signé mais daté d'il y a deux jours.
+  const at = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const old = { id: "01JD8000000000000000000094", ids, url: "http://localhost:3000/", at, to: "projet", hashes: HASHES };
+  await writeFile(join(dispatchPaths(dir).dispatch, `${old.id}.json`), JSON.stringify({ ...old, sig: signPayload(KEY, old) }));
+  assert.equal(await claimNext(dir, me, AUTH), null, "too old to be taken");
 });

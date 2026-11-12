@@ -161,7 +161,8 @@ function browserSteps(ctx: Context): InstallStep[] {
 
   // Le dossier des notes peut être partagé : la clé n'y est jamais.
   const notesDir = ctx.dataDir ?? PATHS.dataDir;
-  const keyInsideNotes = KEY_FILE.startsWith(`${notesDir.replace(/[\\/]+$/, "")}${PLATFORM === "win32" ? "\\" : "/"}`);
+  const fold = (p: string) => (PLATFORM === "win32" ? p.toLowerCase() : p); // Windows ignore la casse
+  const keyInsideNotes = fold(KEY_FILE).startsWith(fold(`${notesDir.replace(/[\\/]+$/, "")}${PLATFORM === "win32" ? "\\" : "/"}`));
   const steps: InstallStep[] = [
     {
       name: `settings (${CONFIG_FILE})`,

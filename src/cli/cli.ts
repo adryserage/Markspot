@@ -118,9 +118,9 @@ async function main(argv: string[]): Promise<number> {
       if (channel && !config.dispatchKey) {
         process.stderr.write("markspot: channel off, no dispatch key on this machine (run markspot install)\n");
       }
-      const handle = channel && config.dispatchKey
+      const handle = channel && config.dispatchKey && config.consumedFile
         ? startChannel({
-            dispatchKey: config.dispatchKey,
+            auth: { key: config.dispatchKey, consumedFile: config.consumedFile },
             dataDir: config.dataDir,
             store,
             name: basename(process.cwd()),

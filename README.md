@@ -104,15 +104,15 @@ Claude Code ne confirme pas la réception : l'envoi reste donc en attente jusqu'
 
 ## Deux postes, un seul dossier de notes
 
-Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
+Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Partage seulement ce dossier (par exemple un partage Samba `markspot-notes` dont le chemin est `~/.local/share/markspot`). Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
 
 ```sh
-node dist/cli.js install --browser all --data-dir \\serveur\partage\.local\share\markspot
+node dist/cli.js install --browser all --data-dir \\serveur\markspot-notes
 ```
 
 Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage.
 
-Les deux postes signent leurs envois « Envoyer à Claude » avec la même clé : une session n'accepte que les envois signés, pour qu'un fichier déposé sur le partage ne puisse pas la réveiller. `install` crée la clé sur le premier poste. Sur le second, recopie-la une fois :
+Les deux postes signent leurs envois « Envoyer à Claude » avec la même clé : une session n'accepte que les envois signés et datés de moins de 25 heures, et jamais deux fois le même, pour qu'un fichier déposé ou recopié sur le partage ne puisse pas la réveiller. `install` crée la clé sur le premier poste. Sur le second, recopie-la une fois :
 
 1. sur le premier poste, `markspot key` affiche la clé ; enregistre-la dans un fichier (par exemple sur une clé USB) ;
 2. sur le second, `markspot install --key-file <ce fichier>`, puis supprime le fichier.

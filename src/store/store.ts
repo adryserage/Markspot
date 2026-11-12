@@ -32,7 +32,7 @@ import type {
   ThreadState,
 } from "../core/model.ts";
 import { CAPTURE_KINDS, LOCAL_SCOPE, stateOf } from "../core/model.ts";
-import { currentPlatform, pathsFor } from "../core/paths.ts";
+import { consumedFileOf, currentPlatform, pathsFor } from "../core/paths.ts";
 import { AnnotationSchema, ResolutionSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
 import type { PublicListener } from "./dispatch.ts";
 
@@ -43,6 +43,8 @@ export interface StoreConfig {
   linkFile?: (existing: string, target: string) => Promise<void>;
   /** Clé qui signe et vérifie les envois ; null : aucun envoi n'est écrit ni pris. */
   dispatchKey?: Buffer | null;
+  /** Envois déjà transmis par ce poste (contre une copie rejouée), à côté de la clé. */
+  consumedFile?: string;
 }
 
 /** Le dossier vient de config.json (clé dataDir) s'il est donné, sinon du système. */
@@ -56,7 +58,7 @@ export async function loadConfig(): Promise<StoreConfig> {
     // pas de réglage : dossier par défaut
   }
   const { readDispatchKey } = await import("./dispatch.ts");
-  return { dataDir, scope: LOCAL_SCOPE, dispatchKey: await readDispatchKey(paths.keyFile) };
+  return { dataDir, scope: LOCAL_SCOPE, dispatchKey: await readDispatchKey(paths.keyFile), consumedFile: consumedFileOf(paths.keyFile) };
 }
 
 export interface ThreadFilter {
