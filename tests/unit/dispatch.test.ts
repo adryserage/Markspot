@@ -8,6 +8,7 @@ import {
   beat,
   chooseListener,
   claimNext,
+  completeClaim,
   dispatchPaths,
   liveListeners,
   purgeDispatch,
@@ -99,6 +100,26 @@ test("a malformed dispatch on a shared folder is ignored, a claim left by a dead
   await utimes(claimedFile, old, old);
   assert.equal(await claimNext(dir, me), null, "requeued during this scan");
   assert.equal((await claimNext(dir, me))?.id, lost.id);
+});
+
+test("a delivered dispatch never comes back, a fresh claim of a dead listener waits a minute", async () => {
+  const dir = await dataDir();
+  const a = listener("01JD8000000000000000000011");
+  await beat(dir, a);
+  await writeDispatch(dir, ids, "http://localhost:3000/prix");
+  const old = new Date(Date.now() - 120_000);
+  for (const n of await readdir(dispatchPaths(dir).dispatch)) {
+    if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
+  }
+  const got = await claimNext(dir, a);
+  assert.ok(got);
+  // L'écoute a est morte juste après la réclamation : sa réclamation est récente, elle reste.
+  const b = listener("01JD8000000000000000000022");
+  await beat(dir, b);
+  assert.equal(await claimNext(dir, b), null);
+  assert.equal(await claimNext(dir, b), null);
+  await completeClaim(dir, got!, a);
+  assert.deepEqual(await readdir(dispatchPaths(dir).claimed), []);
 });
 
 test("dead heartbeats are ignored and purged", async () => {
