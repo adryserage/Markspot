@@ -2,6 +2,9 @@
 //   node build.mjs                 extension complète dans extension/dist/ (hôte natif)
 //   node build.mjs --trial [dir]   extension d'essai complète dans dir (défaut ~/markspot-essai),
 //                                  sans hôte natif : les notes restent dans le navigateur
+//   node build.mjs --out <dir>     extension complète (avec hôte natif) dans dir, par exemple le
+//                                  dossier déjà chargé dans un navigateur : « Recharger » suffit et
+//                                  les notes de l'essai partent au programme local
 // L'identifiant de l'extension est calculé ici à partir de la clé publique du manifeste.
 
 import { createHash } from "node:crypto";
@@ -15,7 +18,14 @@ const pkg = JSON.parse(await readFile("package.json", "utf8"));
 
 const trialIndex = process.argv.indexOf("--trial");
 const trial = trialIndex !== -1;
-const extensionRoot = trial ? resolve(process.argv[trialIndex + 1] ?? join(homedir(), "markspot-essai")) : "extension";
+const outIndex = process.argv.indexOf("--out");
+const outDir = outIndex !== -1 ? process.argv[outIndex + 1] : undefined;
+if (outIndex !== -1 && !outDir) throw new Error("--out needs a folder");
+const extensionRoot = trial
+  ? resolve(process.argv[trialIndex + 1] ?? join(homedir(), "markspot-essai"))
+  : outDir
+    ? resolve(outDir)
+    : "extension";
 
 /** Chrome : sha256 de la clé publique DER, 32 premiers chiffres hexadécimaux transposés en a-p. */
 const extensionId = createHash("sha256")
@@ -64,6 +74,10 @@ for (const weight of [400, 700]) {
 // La licence SIL OFL demande que son texte accompagne chaque copie des polices.
 await copyFile("node_modules/@fontsource/atkinson-hyperlegible/LICENSE", join(dist, "fonts", "OFL.txt"));
 
+if (outDir && !trial) {
+  await writeFile(join(extensionRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+}
+
 if (trial) {
   const trialManifest = {
     ...manifest,
@@ -73,4 +87,5 @@ if (trial) {
   await writeFile(join(extensionRoot, "manifest.json"), JSON.stringify(trialManifest, null, 2) + "\n");
 }
 
-console.log(`built markspot ${pkg.version}${trial ? ` (trial, in ${extensionRoot})` : ""}, extension id ${extensionId}`);
+const where = trial ? ` (trial, in ${extensionRoot})` : outDir ? ` (in ${extensionRoot})` : "";
+console.log(`built markspot ${pkg.version}${where}, extension id ${extensionId}`);
