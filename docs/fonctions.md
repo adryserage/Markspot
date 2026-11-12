@@ -130,11 +130,12 @@ Les données de la page (adresse, titre, texte, attributs) arrivent dans un bloc
 
 Le lanceur est `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/Application Support/markspot/bin/markspot` sous macOS et `%LOCALAPPDATA%\markspot\bin\markspot.bat` sous Windows. Depuis le dépôt, `node dist/cli.js` fait la même chose.
 
-- `markspot install` : installe le programme local pour Chrome et Brave, le serveur MCP dans Claude Code et le skill. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir` (voir le [README](../README.md#installer)) ;
+- `markspot install` : installe le programme local pour Chrome et Brave, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste (voir le [README](../README.md#installer)) ;
+- `markspot key` : affiche la clé d'envoi de ce poste, à recopier une fois sur l'autre. Garde-la secrète ;
 - `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et l'aller-retour entre l'extension et le programme local ;
 - `markspot uninstall` : défait chaque étape ;
 - `markspot listen [--name <projet>] [--url <adresse>] [--timeout <secondes>]` : attend un envoi. Code 0 quand des notes arrivent, 2 après le délai (une heure par défaut) ;
-- `markspot claude [options de claude]` : lance Claude Code avec le canal Markspot ;
+- `markspot claude [options de claude]` : lance Claude Code avec le canal Markspot, en mode « demande avant chaque commande » sauf si tu choisis un autre mode ;
 - `markspot mcp` et `markspot host` : lancés par Claude Code et par le navigateur, jamais à la main.
 
 ## Deux postes

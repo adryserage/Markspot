@@ -12,6 +12,7 @@ import { BROWSER_IDS, hostTargets, isBrowserId, type BrowserId } from "./browser
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
 import { claudeCommand, realProbe } from "./claude-command.ts";
 import { launcherFor } from "./launcher.ts";
+import { newDispatchKey, readDispatchKey } from "../store/dispatch.ts";
 
 export interface Settings {
   /** Navigateurs où déclarer l'hôte natif (voir browsers.ts). */
@@ -34,6 +35,8 @@ export interface Context extends Settings {
   nodePath: string;
   /** Dossier skill/ du paquet, lié dans ~/.claude/skills/markspot. */
   skillDir: string;
+  /** Clé d'envoi recopiée de l'autre poste (--key-file), en base64. */
+  importKey?: string;
 }
 
 export interface InstallStep {
@@ -49,6 +52,7 @@ const PLATFORM = currentPlatform();
 const HOME = homedir();
 const PATHS = pathsFor(PLATFORM, process.env, HOME);
 const CONFIG_FILE = join(PATHS.configDir, "config.json");
+export const KEY_FILE = PATHS.keyFile;
 export const HOST_STATUS_FILE = join(PATHS.dataDir, "host-status.json");
 /** La commande markspot pour les sessions Claude Code (markspot listen), toujours sur le poste. */
 export const CLI_LAUNCHER = join(PATHS.dataDir, "bin", launcherFor(PLATFORM, "", "", "cli").fileName);
@@ -155,12 +159,31 @@ function browserSteps(ctx: Context): InstallStep[] {
       2,
     ) + "\n";
 
+  // Le dossier des notes peut être partagé : la clé n'y est jamais.
+  const notesDir = ctx.dataDir ?? PATHS.dataDir;
+  const fold = (p: string) => (PLATFORM === "win32" ? p.toLowerCase() : p); // Windows ignore la casse
+  const keyInsideNotes = fold(KEY_FILE).startsWith(fold(`${notesDir.replace(/[\\/]+$/, "")}${PLATFORM === "win32" ? "\\" : "/"}`));
   const steps: InstallStep[] = [
     {
       name: `settings (${CONFIG_FILE})`,
       satisfied: async () => (await readOr(CONFIG_FILE)) === settingsJson,
       apply: () => writePrivate(CONFIG_FILE, settingsJson),
       revert: () => rm(CONFIG_FILE, { force: true }),
+    },
+    {
+      name: `dispatch key (${KEY_FILE})`,
+      satisfied: async () => {
+        const key = await readDispatchKey(KEY_FILE);
+        if (!key || keyInsideNotes) return false;
+        return !ctx.importKey || key.toString("base64") === ctx.importKey;
+      },
+      apply: async () => {
+        if (keyInsideNotes) throw new Error(`the dispatch key ${KEY_FILE} must not sit inside the notes folder`);
+        // Jamais de nouvelle clé par-dessus une bonne : l'autre poste a la même.
+        if (!ctx.importKey && (await readDispatchKey(KEY_FILE))) return;
+        await writePrivate(KEY_FILE, `${ctx.importKey ?? newDispatchKey()}\n`);
+      },
+      revert: () => rm(KEY_FILE, { force: true }),
     },
     {
       name: `host launcher (${launcherPath})`,

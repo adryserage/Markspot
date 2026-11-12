@@ -334,6 +334,9 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       if (reply.type === "rejected" && reply.reason === "nobody listens") {
         return { ok: false, error: "aucune session n'écoute : dis « écoute mes annotations » dans la session du projet, puis renvoie" };
       }
+      if (reply.type === "rejected" && reply.reason === "no dispatch key") {
+        return { ok: false, error: "le programme local n'a pas de clé d'envoi : relance markspot install sur ce poste" };
+      }
       if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local (mets-le à jour ?)" };
       await saveTarget(sender.url, { name: reply.to, ...(reply.host ? { host: reply.host } : {}) });
       return { ok: true, type: "sent", count: ids.length, to: reply.to, ...(reply.host ? { host: reply.host } : {}), listening: reply.listening };
