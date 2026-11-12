@@ -13,7 +13,7 @@ import {
 } from "../../src/core/model.ts";
 import { HOST_NAME, type ExtensionToHost, type HostToExtension } from "../../src/core/protocol.ts";
 import { captureTab } from "./capture.ts";
-import { capturePng, createFromDraft, discardDraft, listForPage, putDraft } from "./local-store.ts";
+import { capturePng, createFromDraft, discardDraft, exportAll, listForPage, putDraft } from "./local-store.ts";
 import type { OverlayReply, OverlayRequest } from "./messages.ts";
 
 declare const __MARKSPOT_NATIVE__: boolean;
@@ -35,6 +35,19 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command === "toggle-annotate") await injectOverlay(tab);
 });
 chrome.action.onClicked.addListener(injectOverlay);
+
+// --------------------------------------------------------- icon menu
+
+const EXPORT_MENU = "markspot-export";
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({ id: EXPORT_MENU, title: "Exporter les notes", contexts: ["action"] });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === EXPORT_MENU) await chrome.tabs.create({ url: chrome.runtime.getURL("dist/export.html") });
+});
 
 async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSender): Promise<OverlayReply> {
   switch (request.type) {
@@ -122,6 +135,7 @@ function request(message: ExtensionToHost): Promise<HostToExtension> {
 const api = {
   ping: () => request({ type: "ping" }),
   status: () => ({ native: __MARKSPOT_NATIVE__, connected: port !== null, lastError }),
+  exportAll: () => exportAll(new Date()),
 };
 
 declare global {

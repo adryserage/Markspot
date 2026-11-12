@@ -51,6 +51,8 @@ const dist = join(extensionRoot, "dist");
 const browser = { bundle: true, platform: "browser", target: "chrome130", define, loader: { ".css": "text" } };
 await build({ ...browser, entryPoints: ["extension/src/background.ts"], outfile: join(dist, "background.js"), format: "esm" });
 await build({ ...browser, entryPoints: ["extension/src/overlay/overlay.ts"], outfile: join(dist, "overlay.js"), format: "iife" });
+await build({ ...browser, entryPoints: ["extension/src/export.ts"], outfile: join(dist, "export.js"), format: "esm" });
+for (const page of ["export.html", "export.css"]) await copyFile(join("extension/src", page), join(dist, page));
 
 await mkdir(join(dist, "fonts"), { recursive: true });
 for (const weight of [400, 700]) {

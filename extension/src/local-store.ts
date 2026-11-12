@@ -12,6 +12,7 @@ import {
   type CaptureKind,
   type NewAnnotation,
 } from "../../src/core/model.ts";
+import { buildExport, type ExportFile } from "../../src/core/export.ts";
 import type { CaptureResult } from "./capture.ts";
 
 const ANN = "ann:";
@@ -54,6 +55,14 @@ export async function createFromDraft(
   await chrome.storage.local.set(items);
   await discardDraft(draftId);
   return annotation;
+}
+
+/** Toutes les notes et leurs captures, sans les brouillons. */
+export async function exportAll(now: Date): Promise<ExportFile> {
+  const annotations = await allAnnotations();
+  const keys = annotations.flatMap((a) => CAPTURE_KINDS.map((kind) => pngKey(a.id, kind)));
+  const pngs = keys.length > 0 ? ((await chrome.storage.local.get(keys)) as Record<string, string>) : {};
+  return buildExport(annotations, (a, kind) => pngs[pngKey(a.id, kind)] ?? null, now);
 }
 
 export async function capturePng(id: AnnotationId, kind: CaptureKind): Promise<string | null> {
