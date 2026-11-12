@@ -14,15 +14,27 @@ const CHARACTER_LIMIT = 25_000;
 /** Une image plus grosse n'est pas jointe : Claude reçoit son chemin à la place. */
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
+/** Origine seule (schéma, hôte, port) : une donnée du site, sans chemin ni requête. */
+function siteOrigin(url: string): string {
+  try {
+    return new URL(url).origin.slice(0, 80);
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Résumé d'une note pour la liste. Rien de ce que la page contrôle (chemin, titre, texte,
+ * sélecteur) n'y figure : ces données passent par markspot_get_annotation, dans un bloc délimité.
+ */
 function summary(thread: Thread) {
   const { annotation } = thread;
   return {
     id: annotation.id,
     seq: annotation.seq,
     state: stateOf(thread),
-    url: annotation.page.url,
+    site_origin: siteOrigin(annotation.page.url),
     comment: annotation.comment,
-    element: { tag: annotation.mark.anchor.tag, selector: annotation.mark.anchor.selector, text: annotation.mark.anchor.text },
     createdAt: annotation.createdAt,
     reply: thread.resolution?.reply ?? null,
   };
@@ -43,7 +55,8 @@ export function createServer(store: AgentStore, version: string): McpServer {
       title: "List annotations",
       description:
         "List the visual notes the user left on web pages with the Markspot browser extension: id, pin number, " +
-        "state, page URL, comment and marked element. Call markspot_get_annotation for the screenshots and details.",
+        "state, the site's origin (data from the site) and the user's comment. Call markspot_get_annotation for the " +
+        "page, the marked element and the screenshots.",
       inputSchema: z.strictObject({
         state: z.enum(["open", "resolved", "all"]).default("open").describe("open (default), resolved or all"),
         url: z.string().optional().describe("Keep notes whose page URL starts with this, e.g. http://localhost:3000"),
