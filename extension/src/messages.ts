@@ -1,6 +1,7 @@
 // Messages entre l'overlay (dans la page) et le service worker.
 
 import type { Stroke } from "../../src/core/drawing.ts";
+import type { PublicListener } from "../../src/core/protocol.ts";
 import type { Annotation, AnnotationId, Mark, Resolution, Viewport, ViewportRect } from "../../src/core/model.ts";
 
 /** Ce que la page affiche d'une note. pending : pas encore écrite par l'hôte. */
@@ -32,8 +33,12 @@ export type OverlayRequest =
   | { type: "reopen"; id: AnnotationId }
   /** Ouvre la page d'export dans un nouvel onglet. */
   | { type: "openExport" }
-  /** « Envoyer à Claude » : les notes ouvertes de la page, à la session qui écoute. */
+  /** « Envoyer à Claude » : les notes ouvertes de la page, au projet choisi pour ce site. */
   | { type: "send"; ids: AnnotationId[] }
+  /** Les sessions qui écoutent cette page, et le projet choisi pour ce site. */
+  | { type: "targets" }
+  /** Le projet qui reçoit les envois de ce site (null : plus de choix gardé). */
+  | { type: "setTarget"; name: string | null }
   | { type: "discard"; draftId: string }
   | { type: "list"; url: string }
   | { type: "thumbnail"; id: AnnotationId }
@@ -46,7 +51,10 @@ export type OverlayReply =
   /** error : une partie seulement a été effacée (ids dit lesquelles). */
   | { ok: true; type: "cleared"; ids: AnnotationId[]; error?: string }
   | { ok: true; type: "state"; note: NoteView }
-  | { ok: true; type: "sent"; count: number; listeners: number }
+  | { ok: true; type: "sent"; count: number; to: string; listening: number }
+  /** Plusieurs projets écoutent et aucun n'est choisi pour ce site. */
+  | { ok: true; type: "choose"; listeners: PublicListener[] }
+  | { ok: true; type: "targets"; listeners: PublicListener[]; chosen: string | null }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
   | { ok: true; type: "status"; native: boolean; connected: boolean }

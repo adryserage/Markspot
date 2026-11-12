@@ -26,8 +26,9 @@ async function dataDir(): Promise<string> {
   return dir;
 }
 
-const listener = (id: string, urlPrefix = "", startedAt = "2026-11-12T08:00:00.000Z"): Listener => ({
+const listener = (id: string, urlPrefix = "", startedAt = "2026-11-12T08:00:00.000Z", name = "projet"): Listener => ({
   id,
+  name,
   urlPrefix,
   startedAt,
   pid: 1,
@@ -53,7 +54,7 @@ test("two listeners claiming at once: exactly one gets the dispatch", async () =
   const b = listener("b");
   await beat(dir, a);
   await beat(dir, b);
-  await writeDispatch(dir, ids, "http://localhost:3000/prix");
+  await writeDispatch(dir, ids, "http://localhost:3000/prix", "projet");
   // Après le délai de grâce, les deux peuvent le prendre : le rename en laisse passer un seul.
   const file = (await readdir(dispatchPaths(dir).dispatch)).find((n) => n.endsWith(".json"))!;
   const old = new Date(Date.now() - 60_000);
@@ -69,7 +70,7 @@ test("a fresh dispatch waits for the chosen listener; one that does not match ne
   const site = listener("site", "http://localhost:3000", "2026-11-12T09:00:00.000Z");
   const other = listener("other", "https://autre.test");
   for (const l of [general, site, other]) await beat(dir, l);
-  await writeDispatch(dir, ids, "http://localhost:3000/prix");
+  await writeDispatch(dir, ids, "http://localhost:3000/prix", "projet");
   assert.equal(await claimNext(dir, other), null);
   assert.equal(await claimNext(dir, general), null, "inside the grace period, only the chosen listener takes it");
   assert.ok(await claimNext(dir, site));
@@ -77,7 +78,7 @@ test("a fresh dispatch waits for the chosen listener; one that does not match ne
 
 test("a dispatch sent while nobody listens waits for the next listener", async () => {
   const dir = await dataDir();
-  await writeDispatch(dir, ids, "http://localhost:3000/prix");
+  await writeDispatch(dir, ids, "http://localhost:3000/prix", "projet");
   const late = listener("late");
   await beat(dir, late);
   assert.ok(await claimNext(dir, late));
@@ -108,7 +109,7 @@ test("a delivered dispatch never comes back, a fresh claim of a dead listener wa
   const dir = await dataDir();
   const a = listener("01JD8000000000000000000011");
   await beat(dir, a);
-  await writeDispatch(dir, ids, "http://localhost:3000/prix");
+  await writeDispatch(dir, ids, "http://localhost:3000/prix", "projet");
   const old = new Date(Date.now() - 120_000);
   for (const n of await readdir(dispatchPaths(dir).dispatch)) {
     if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
@@ -122,6 +123,29 @@ test("a delivered dispatch never comes back, a fresh claim of a dead listener wa
   assert.equal(await claimNext(dir, b), null);
   await completeClaim(dir, got!, a);
   assert.deepEqual(await readdir(dispatchPaths(dir).claimed), []);
+});
+
+test("a dispatch aimed at a project is taken only by that project, even after the grace period", async () => {
+  const dir = await dataDir();
+  const markspot = listener("01JD8000000000000000000031", "", "2026-11-12T08:00:00.000Z", "Markspot");
+  const subv = listener("01JD8000000000000000000032", "", "2026-11-12T07:00:00.000Z", "Subvention.app");
+  await beat(dir, markspot);
+  await beat(dir, subv);
+  await writeDispatch(dir, ids, "http://localhost:3000/", "Markspot");
+  const old = new Date(Date.now() - 60_000);
+  for (const n of await readdir(dispatchPaths(dir).dispatch)) {
+    if (n.endsWith(".json")) await utimes(join(dispatchPaths(dir).dispatch, n), old, old);
+  }
+  assert.equal(await claimNext(dir, subv), null, "another project never takes it");
+  assert.equal((await claimNext(dir, markspot))?.to, "Markspot");
+});
+
+test("an aimed dispatch waits while its project restarts, then the new listener of that name takes it", async () => {
+  const dir = await dataDir();
+  await writeDispatch(dir, ids, "http://localhost:3000/", "Markspot");
+  const restarted = listener("01JD8000000000000000000041", "", "2026-11-12T10:00:00.000Z", "Markspot");
+  await beat(dir, restarted);
+  assert.equal((await claimNext(dir, restarted))?.to, "Markspot");
 });
 
 test("dead heartbeats are ignored and purged", async () => {

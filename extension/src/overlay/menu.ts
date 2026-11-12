@@ -2,6 +2,7 @@
 // de la page, un clic va à la note, « Modifier » change le commentaire d'une note ouverte,
 // et « Effacer les notes réglées » retire celles que Claude a déjà réglées.
 
+import type { PublicListener } from "../../../src/core/protocol.ts";
 import type { NoteView } from "../messages.ts";
 
 export interface MenuActions {
@@ -15,8 +16,11 @@ export interface MenuActions {
   /** Règle ces notes ; rend celles qui ont été réglées et un message s'il en manque. */
   resolveAll(notes: NoteView[]): Promise<{ done: NoteView[]; error: string | null }>;
   openExport(): Promise<string | null>;
-  /** « Envoyer à Claude » ; rend le message à afficher. */
-  sendToClaude(notes: NoteView[]): Promise<{ text: string; error: boolean }>;
+  /** « Envoyer à Claude » ; rend le message à afficher, et choose quand il faut choisir la session. */
+  sendToClaude(notes: NoteView[]): Promise<{ text: string; error: boolean; choose?: boolean }>;
+  /** Les sessions qui écoutent cette page, et le projet choisi pour ce site. */
+  loadTargets(): Promise<{ listeners: PublicListener[]; chosen: string | null }>;
+  setTarget(name: string | null): Promise<void>;
 }
 
 const UNDO_MS = 8000;
@@ -39,6 +43,9 @@ export class NotesMenu {
   readonly #quick = el("div", "quick");
   readonly #quickSend = el("button", "quick-button send", "Envoyer à Claude");
   readonly #sendInPanel = el("button", "primary menu-clear", "Envoyer à Claude");
+  readonly #target = el("label", "menu-target");
+  readonly #targetSelect = el("select", "menu-target-select");
+  #targetFocused = false;
   #canSend = true;
   readonly #quickResolve = el("button", "quick-button", "Tout régler");
   readonly #quickExport = el("button", "quick-button", "Exporter");
@@ -88,8 +95,14 @@ export class NotesMenu {
     this.#confirm.append(this.#confirmText, answers);
     this.#confirm.hidden = true;
     this.#panel.hidden = true;
-    this.#panel.append(this.#list, this.#message, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
+    this.#panel.append(this.#list, this.#message, this.#target, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
 
+    this.#target.append(el("span", "", "Envoyer à"), this.#targetSelect);
+    this.#targetSelect.addEventListener("focus", () => (this.#targetFocused = true));
+    this.#targetSelect.addEventListener("blur", () => (this.#targetFocused = false));
+    this.#targetSelect.addEventListener("change", (e) => {
+      if (e.isTrusted) void this.actions.setTarget(this.#targetSelect.value || null);
+    });
     for (const button of [this.#quickSend, this.#sendInPanel]) {
       button.type = "button";
       button.addEventListener("click", (e) => {
@@ -128,9 +141,9 @@ export class NotesMenu {
     this.update([]);
   }
 
-  /** Une modification ou une confirmation est en cours : Échap doit d'abord l'annuler. */
+  /** Une modification, une confirmation ou la liste des sessions est en cours : Échap s'arrête là. */
   get editing(): boolean {
-    return this.#editing || !this.#confirm.hidden;
+    return this.#editing || !this.#confirm.hidden || this.#targetFocused;
   }
 
   update(notes: NoteView[]): void {
@@ -145,6 +158,7 @@ export class NotesMenu {
       button.hidden = !this.#canSend;
       button.disabled = openCount === 0;
     }
+    this.#target.hidden = !this.#canSend;
     this.#quickClear.disabled = !notes.some((n) => stateOf(n) === "resolved");
     this.#quickClearAll.disabled = notes.length === 0;
     this.#cancelClearAll();
@@ -169,9 +183,30 @@ export class NotesMenu {
     const open = this.#notes.filter((n) => stateOf(n) !== "resolved");
     if (open.length === 0) return;
     button.disabled = true;
-    const { text, error } = await this.actions.sendToClaude(open);
+    const { text, error, choose } = await this.actions.sendToClaude(open);
     button.disabled = false;
     this.#say(text, error);
+    if (choose) {
+      await this.#refreshTargets();
+      this.#targetSelect.focus();
+    }
+  }
+
+  /** Remplit « Envoyer à » : les projets qui écoutent, plus le choix gardé s'il n'écoute pas. */
+  async #refreshTargets(): Promise<void> {
+    if (!this.#canSend || this.#targetFocused) return;
+    const { listeners, chosen } = await this.actions.loadTargets();
+    const counts = new Map<string, number>();
+    for (const l of listeners) counts.set(l.name, (counts.get(l.name) ?? 0) + 1);
+    const options: HTMLOptionElement[] = [];
+    const placeholder = new Option(counts.size === 0 ? "Aucune session n'écoute" : "Choisir la session", "");
+    options.push(placeholder);
+    for (const [name, count] of counts) {
+      options.push(new Option(count > 1 ? `${name} (${count} sessions)` : name || "(sans nom)", name));
+    }
+    if (chosen && !counts.has(chosen)) options.push(new Option(`${chosen} (n'écoute pas)`, chosen));
+    this.#targetSelect.replaceChildren(...options);
+    this.#targetSelect.value = chosen ?? (counts.size === 1 ? [...counts.keys()][0]! : "");
   }
 
   #say(text: string, error: boolean): void {
@@ -243,10 +278,12 @@ export class NotesMenu {
   }
 
   #setOpen(open: boolean): void {
+    const opening = open && !this.#open;
     this.#open = open;
     this.#toggle.setAttribute("aria-expanded", String(open));
     this.#panel.hidden = !open;
     if (open) this.#render();
+    if (opening) void this.#refreshTargets();
   }
 
   #render(): void {
