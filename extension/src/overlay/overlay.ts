@@ -82,6 +82,8 @@ class Overlay {
   readonly #bar = el("div", "bar");
   readonly #pins = el("div", "pins");
   #panel: HTMLElement | null = null;
+  /** Retire les écouteurs du panneau ouvert quand il se ferme. */
+  #panelListeners: AbortController | null = null;
   readonly #menu: NotesMenu;
 
   #mode: Mode = "idle";
@@ -104,6 +106,11 @@ class Overlay {
       clearResolved: (notes) => this.#clearNotes(notes, false),
       clearAll: (notes) => this.#clearNotes(notes, true),
       setResolved: (note, resolved) => this.#setResolved(note, resolved),
+      resolveAll: (notes) => this.#resolveAll(notes),
+      openExport: async () => {
+        const reply = await ask({ type: "openExport" });
+        return reply.ok ? null : reply.error;
+      },
     });
     this.#menu.element.hidden = true;
     this.#root.append(this.#layer, this.#pins, this.#highlight, this.#drag, this.#bar, this.#menu.element);
@@ -467,8 +474,12 @@ class Overlay {
     const keepInside = () => {
       if (panel.isConnected) moveTo(panel.offsetLeft, panel.offsetTop);
     };
-    new ResizeObserver(keepInside).observe(panel);
-    addEventListener("resize", keepInside, { passive: true });
+    const listeners = new AbortController();
+    this.#panelListeners = listeners;
+    const observer = new ResizeObserver(keepInside);
+    observer.observe(panel);
+    listeners.signal.addEventListener("abort", () => observer.disconnect());
+    addEventListener("resize", keepInside, { passive: true, signal: listeners.signal });
   }
 
   #placePanel(panel: HTMLElement, near: Rect): void {
@@ -483,6 +494,8 @@ class Overlay {
   }
 
   #closePanel(): void {
+    this.#panelListeners?.abort();
+    this.#panelListeners = null;
     this.#panel?.remove();
     this.#panel = null;
   }
@@ -585,6 +598,16 @@ class Overlay {
     // Même en erreur, les notes déjà retirées disparaissent de la page.
     this.#remove(reply.ids);
     return reply.error ? `${reply.ids.length} effacée(s), les autres restent : ${reply.error}` : null;
+  }
+
+  /** Une à une, dans l'ordre : le worker sait si chaque note est en file ou chez le programme local. */
+  async #resolveAll(notes: NoteView[]): Promise<{ done: NoteView[]; error: string | null }> {
+    const done: NoteView[] = [];
+    for (const note of notes) {
+      if (!(await this.#setResolved(note, true))) done.push(note);
+    }
+    const missed = notes.length - done.length;
+    return { done, error: missed > 0 ? `${done.length} réglée(s), ${missed} non : réessaie dans un instant.` : null };
   }
 
   async #setResolved(note: NoteView, resolved: boolean): Promise<string | null> {
