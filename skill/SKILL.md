@@ -32,7 +32,7 @@ Si les instructions du serveur MCP `markspot` disent que la session écoute par 
    - autre code : dis-le en une ligne et relance une fois.
 4. Arrête quand la personne dit « arrête d'écouter » : arrête la tâche de fond.
 
-Sans tâche de fond (autre client MCP), l'outil `markspot_wait_for_annotations` attend les nouvelles notes, mais chaque relance coûte un tour : préfère la commande.
+Sans tâche de fond (autre client MCP), l'outil `markspot_wait_for_annotations` attend les nouvelles notes et les envois « Envoyer à Claude » : la session apparaît dans « Envoyer à » pendant l'attente et 10 minutes après. Un résultat avec `dispatch_id` liste des notes envoyées : règle-les. Chaque relance coûte un tour : préfère la commande.
 
 ## Règles
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EXTENSION_ID, EXTENSION_ORIGIN, VERSION } from "../core/build.ts";
 import type { AnnotationId } from "../core/model.ts";
+import type { WaitListener } from "../mcp/wait-listener.ts";
 import { runHost } from "../host/host.ts";
 import { loadConfig, openAgentStore, openHostStore } from "../store/store.ts";
 import { BROWSER_IDS, isBrowserId } from "./browsers.ts";
@@ -107,10 +108,11 @@ async function main(argv: string[]): Promise<number> {
       });
     case "mcp": {
       // Import différé : l'hôte, lancé par le navigateur, ne charge pas le SDK MCP.
-      const [{ StdioServerTransport }, { createServer }, { startChannel }] = await Promise.all([
+      const [{ StdioServerTransport }, { createServer }, { startChannel }, { startWaitListener }] = await Promise.all([
         import("@modelcontextprotocol/server/stdio"),
         import("../mcp/server.ts"),
         import("../mcp/channel.ts"),
+        import("../mcp/wait-listener.ts"),
       ]);
       const config = await loadConfig();
       const store = await openAgentStore(config);
@@ -118,7 +120,16 @@ async function main(argv: string[]): Promise<number> {
       const channel = process.env.MARKSPOT_CHANNEL === "1";
       // L'accusé de réception du canal : lié après coup, le canal démarre après le serveur.
       let seen: ((id?: AnnotationId) => void) | undefined;
-      const server = createServer(store, VERSION, { listenCommand: CLI_LAUNCHER, channel, onActivity: (id) => seen?.(id) });
+      let dispatches: WaitListener | undefined;
+      const server = createServer(store, VERSION, {
+        listenCommand: CLI_LAUNCHER,
+        channel,
+        onActivity: (id) => seen?.(id),
+        // Lié après coup, comme seen : l'écoute est créée une fois le serveur prêt.
+        get dispatches() {
+          return dispatches;
+        },
+      });
       // connect() et non serveStdio() : Claude Code n'accepte les canaux qu'avec l'ancienne
       // ouverture du protocole, que serveStdio ne propose pas.
       const transport = new StdioServerTransport();
@@ -137,7 +148,21 @@ async function main(argv: string[]): Promise<number> {
           })
         : null;
       seen = handle ? (id) => handle.seen(id) : undefined;
-      const stopChannel = handle ? () => handle.stop() : async () => {};
+      // Sans canal, l'outil d'attente fait l'écoute (une seule par processus).
+      const waiter =
+        !handle && config.dispatchKey && config.consumedDir
+          ? startWaitListener({
+              dataDir: config.dataDir,
+              store,
+              name: basename(process.cwd()),
+              auth: { key: config.dispatchKey, consumedDir: config.consumedDir },
+            })
+          : null;
+      dispatches = waiter ?? undefined;
+      const stopChannel = async () => {
+        await handle?.stop();
+        await waiter?.stop();
+      };
       process.stderr.write(`markspot ${VERSION} MCP server on stdio${channel ? ", channel on" : ""}\n`);
       return new Promise<number>(() => {
         // Sortie explicite : stdin et les minuteries ne doivent pas garder le processus en vie.
