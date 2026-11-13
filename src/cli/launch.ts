@@ -41,18 +41,45 @@ async function alreadyListening(): Promise<boolean> {
   }
 }
 
+/** La question et l'écho de la réponse. Pur. */
+export interface PromptText {
+  question: string;
+  yes: string;
+  no: string;
+}
+
+/** En français si la locale commence par fr, en anglais sinon. n ou N vaut non dans les deux. */
+export function promptText(locale: string): PromptText {
+  return /^fr/i.test(locale)
+    ? { question: "Markspot écoute cette session ? [O/n] (oui dans 5 s) ", yes: "oui", no: "non" }
+    : { question: "Should Markspot listen to this session? [Y/n] (yes in 5 s) ", yes: "yes", no: "no" };
+}
+
+/** La locale du terminal : LC_ALL, LC_MESSAGES puis LANG (la première non vide), sinon celle d'Intl. */
+export function terminalLocale(
+  env: Record<string, string | undefined>,
+  fallback: string = Intl.DateTimeFormat().resolvedOptions().locale,
+): string {
+  for (const name of ["LC_ALL", "LC_MESSAGES", "LANG"]) {
+    const value = env[name];
+    if (value) return value;
+  }
+  return fallback;
+}
+
 /** Une touche, 5 s au plus. true : oui (Entrée, autre touche ou rien) ; false : n ; null : Ctrl+C. */
 function askOnce(): Promise<boolean | null> {
+  const text = promptText(terminalLocale(process.env));
   return new Promise((resolve) => {
     const stdin = process.stdin;
     stdin.setRawMode(true); // avant la question : une touche tapée tout de suite n'est pas affichée en double
-    process.stdout.write("Markspot écoute cette session ? [O/n] (oui dans 5 s) ");
+    process.stdout.write(text.question);
     const finish = (answer: boolean | null) => {
       clearTimeout(timer);
       stdin.off("data", onData);
       stdin.setRawMode(false);
       stdin.pause(); // rend le terminal à claude
-      process.stdout.write(answer === null ? "\n" : answer ? "oui\n" : "non\n");
+      process.stdout.write(answer === null ? "\n" : `${answer ? text.yes : text.no}\n`);
       resolve(answer);
     };
     const onData = (chunk: Buffer) => {
