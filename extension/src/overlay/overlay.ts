@@ -9,7 +9,7 @@ import type { Annotation, Mark, PageRect, Rect, Viewport, ViewportRect } from ".
 import { OVERLAY_PORT, ask, type NoteView, type OverlayPush } from "../messages.ts";
 import { describeElement } from "./anchor.ts";
 import { DrawingPad } from "./drawing-pad.ts";
-import { NotesMenu, STATE_LABEL, stateOf } from "./menu.ts";
+import { commentForm, NotesMenu, STATE_LABEL, stateOf } from "./menu.ts";
 import css from "./overlay.css";
 
 const DRAG_THRESHOLD = 6;
@@ -87,6 +87,8 @@ class Overlay {
   readonly #menu: NotesMenu;
 
   #mode: Mode = "idle";
+  /** Annule une modification ou une suppression en cours dans la fiche (Échap). */
+  #cardCancel: (() => void) | null = null;
   #notes: NoteView[] = [];
   #port: chrome.runtime.Port | null = null;
   #target: Element | null = null;
@@ -105,6 +107,7 @@ class Overlay {
       edit: (note, comment) => this.#edit(note, comment),
       clearResolved: (notes) => this.#clearNotes(notes, false),
       clearAll: (notes) => this.#clearNotes(notes, true),
+      clearOne: (note) => this.#clearOne(note),
       setResolved: (note, resolved) => this.#setResolved(note, resolved),
       resolveAll: (notes) => this.#resolveAll(notes),
       sendToClaude: async (notes) => {
@@ -229,6 +232,13 @@ class Overlay {
     if (this.#mode === "idle" && !this.#panel) return;
     event.preventDefault();
     event.stopPropagation();
+    // Une modification ou une suppression en cours dans la fiche s'annule d'abord.
+    if (this.#cardCancel) {
+      const cancel = this.#cardCancel;
+      this.#cardCancel = null;
+      cancel();
+      return;
+    }
     // Une modification en cours dans le menu s'annule d'abord, sans quitter le mode.
     if (this.#menu.editing) {
       this.#menu.cancelEdit();
@@ -531,6 +541,7 @@ class Overlay {
   }
 
   #closePanel(): void {
+    this.#cardCancel = null;
     this.#panelListeners?.abort();
     this.#panelListeners = null;
     this.#panel?.remove();
@@ -629,6 +640,16 @@ class Overlay {
     return null;
   }
 
+  /** Une seule note : si elle n'a pas été retirée, c'est un échec (déjà effacée ailleurs ?). */
+  async #clearOne(note: NoteView): Promise<string | null> {
+    const reply = await ask({ type: "clear", ids: [note.annotation.id], includeOpen: true });
+    if (!reply.ok) return reply.error;
+    if (reply.type !== "cleared") return "réponse inattendue";
+    this.#remove(reply.ids);
+    if (reply.ids.includes(note.annotation.id)) return null;
+    return reply.error ?? "note introuvable : recharge la page";
+  }
+
   async #clearNotes(notes: NoteView[], includeOpen: boolean): Promise<string | null> {
     const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id), includeOpen });
     if (!reply.ok) return reply.error;
@@ -708,6 +729,54 @@ class Overlay {
     const close = el("button", "ghost", "Fermer");
     close.type = "button";
     close.addEventListener("click", () => this.#closePanel());
+    // « Modifier » : le commentaire devient un champ ; enregistré, la fiche se rouvre à jour.
+    const editButton = resolution ? null : el("button", "ghost", "Modifier");
+    if (editButton) {
+      editButton.type = "button";
+      editButton.addEventListener("click", (e) => {
+        if (!e.isTrusted) return;
+        const restore = () => {
+          this.#cardCancel = null;
+          form.replaceWith(comment);
+          actions.hidden = false;
+        };
+        const form = commentForm(note, {
+          save: (text) => this.#edit(note, text),
+          done: () => {
+            this.#cardCancel = null;
+            const fresh = this.#notes.find((n) => n.annotation.id === annotation.id);
+            if (fresh) void this.#openCard(fresh);
+            else this.#closePanel();
+          },
+          cancel: restore,
+        });
+        comment.replaceWith(form);
+        actions.hidden = true;
+        this.#cardCancel = restore;
+      });
+    }
+    // « Supprimer » : un second clic confirme ; Échap ou un délai annule.
+    const remove = el("button", "ghost danger-text", "Supprimer");
+    remove.type = "button";
+    remove.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      if (!remove.classList.contains("confirming")) {
+        remove.classList.add("confirming");
+        remove.textContent = "Confirmer la suppression";
+        this.#cardCancel = () => {
+          remove.classList.remove("confirming");
+          remove.textContent = "Supprimer";
+        };
+        return;
+      }
+      this.#cardCancel = null;
+      remove.disabled = true;
+      const error = await this.#clearOne(note);
+      if (error) {
+        remove.disabled = false;
+        remove.textContent = `Non supprimée : ${error}`;
+      }
+    });
     const toggle = el("button", "ghost", resolution ? "Rouvrir" : "Marquer réglée");
     toggle.type = "button";
     toggle.addEventListener("click", async (e) => {
@@ -720,7 +789,7 @@ class Overlay {
       this.#closePanel();
     });
     const actions = el("div", "actions");
-    actions.append(toggle, close);
+    actions.append(toggle, ...(editButton ? [editButton] : []), remove, close);
     head.append(el("span", "grip"));
     panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
     this.#openPanel(
