@@ -87,7 +87,7 @@ Une session écoute de deux façons.
 
 ### Mode écoute (par défaut)
 
-Dis « écoute mes annotations » à la session. Claude lance `markspot listen --name <projet>` en tâche de fond : l'attente ne coûte rien, et la commande se termine quand des notes arrivent. Claude les règle, puis relance l'écoute. Il faut le redire dans chaque nouvelle session.
+Dis « écoute mes annotations » à la session. Claude lance `markspot listen --name <projet>` en tâche de fond : l'attente ne coûte rien, et la commande se termine quand des notes arrivent. Claude les règle, puis relance l'écoute. Il faut le redire dans chaque nouvelle session. Si Claude attend avec l'outil `markspot_wait_for_annotations` plutôt qu'avec la commande, la session apparaît aussi dans « Envoyer à » : pendant l'attente et 10 minutes après.
 
 ### Réveil automatique (aperçu de recherche)
 

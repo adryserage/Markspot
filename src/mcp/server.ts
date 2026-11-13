@@ -7,7 +7,8 @@ import * as z from "zod/v4";
 import { stateOf, type AnnotationId, type Thread } from "../core/model.ts";
 import { REPLY_MAX, parseAnnotationId } from "../core/schema.ts";
 import type { AgentStore } from "../store/store.ts";
-import { renderSummary, renderThread, summary } from "./render.ts";
+import { renderDispatch, renderSummary, renderThread, summary } from "./render.ts";
+import type { WaitListener } from "./wait-listener.ts";
 
 const AGENT = { kind: "agent", id: "claude-code", name: "Claude" } as const;
 const CHARACTER_LIMIT = 25_000;
@@ -28,6 +29,8 @@ export function createServer(
     channel?: boolean;
     /** Chaque appel d'outil ; avec l'id de la note ouverte ou réglée. Accusé de réception du canal. */
     onActivity?: (id?: AnnotationId) => void;
+    /** Sans canal : l'outil d'attente annonce la session et reçoit les envois « Envoyer à Claude ». */
+    dispatches?: WaitListener | undefined;
   } = {},
 ): McpServer {
   const { listenCommand, channel } = options;
@@ -104,13 +107,16 @@ export function createServer(
         "Listen mode: return the open notes with a pin number above after_seq (default 0, so the first call returns " +
         "every open note at once), or wait until the user leaves one in the browser. Same fields as " +
         "markspot_list_annotations. Pass last_seq from the previous call as after_seq to keep listening without " +
-        "missing or repeating a note. Returns an empty list when the timeout expires.",
+        "missing or repeating a note. Returns an empty list when the timeout expires. While it waits, this session " +
+        "is listed in the page's « Envoyer à » picker and also returns the notes the user sends to it with " +
+        "« Envoyer à Claude » (dispatch_id set). Prefer running `markspot listen` as a background command when you can: " +
+        "waiting there costs no turn.",
       inputSchema: z.strictObject({
         after_seq: z.number().int().min(0).default(0).describe("Return notes with a pin number above this (last_seq of the previous call)"),
         url: z.string().optional().describe("Only notes whose page URL starts with this"),
         timeout_seconds: z.number().int().min(5).max(600).default(300),
       }),
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ after_seq, url, timeout_seconds }, ctx) => {
       activity();
@@ -131,6 +137,21 @@ export function createServer(
           };
           return {
             content: [{ type: "text", text: `${batch.map(renderSummary).join("\n")}\n\n${JSON.stringify(result)}` }],
+            structuredContent: result,
+          };
+        }
+        // Un envoi « Envoyer à Claude » pour cette session. last_seq ne bouge pas : ces notes peuvent
+        // avoir un numéro plus petit, et le suivre ferait sauter des notes.
+        const sent = options.dispatches ? await options.dispatches.next() : null;
+        if (sent) {
+          if (signal?.aborted) {
+            await options.dispatches!.release(sent.dispatch);
+            break;
+          }
+          await options.dispatches!.complete(sent.dispatch);
+          const result = { last_seq: baseline, more: false, dispatch_id: sent.dispatch.id, annotations: sent.open.map(summary) };
+          return {
+            content: [{ type: "text", text: `${renderDispatch(sent.dispatch.id, sent.open)}\n\n${JSON.stringify(result)}` }],
             structuredContent: result,
           };
         }
