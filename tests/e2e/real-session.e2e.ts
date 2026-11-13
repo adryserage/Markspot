@@ -186,7 +186,7 @@ try {
   await writeFile(stopFile, "");
   await sleep(3000);
   session.kill("SIGKILL");
-  await agent.clear({ state: "all", urlPrefix: url }).catch(() => undefined);
+  await agent.clear({ state: "all", urlPrefix: url }).catch((error: Error) => console.error(`warning: test note not cleared (${error.message}): clear ${url} by hand`));
   await page?.close().catch(() => undefined);
   await browser.close().catch(() => undefined);
   server.close();
