@@ -10,6 +10,7 @@ import { chromium, type Page } from "playwright-core";
 import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
 const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
@@ -24,6 +25,7 @@ assert.ok(context, "no browser context");
 
 
 let page: Page | undefined;
+let restoreLang: (() => Promise<void>) | undefined;
 try {
   await cdp.send("Extensions.loadUnpacked", { path: resolve("extension") });
   // Le rechargement redémarre le service worker : attendre qu'il réponde avant d'activer le mode.
@@ -37,6 +39,7 @@ try {
   } finally {
     ready.close();
   }
+  restoreLang = await useFrench(CDP_URL, EXTENSION_ID);
   const opened = context.waitForEvent("page", (p) => p.url().startsWith(url));
   await cdp.send("Target.createTarget", { url, newWindow: true });
   page = await opened;
@@ -152,7 +155,8 @@ try {
     try {
       const exportPage = await context.newPage();
       await exportPage.goto(`chrome-extension://${EXTENSION_ID}/dist/export.html`);
-      await exportPage.waitForFunction(() => !document.getElementById("status")?.textContent?.startsWith("Lecture"));
+      // Le texte d'attente est d'abord celui du HTML (anglais), puis celui de la langue choisie.
+      await exportPage.waitForFunction(() => !/^(Lecture|Reading)/.test(document.getElementById("status")?.textContent ?? ""));
       const status = await exportPage.locator("#status").textContent();
       assert.match(status ?? "", /déjà dans le dossier Markspot/);
       await exportPage.screenshot({ path: join(ARTIFACTS, "6-export.png") });
@@ -166,7 +170,8 @@ try {
   }
 } finally {
   // Retire toutes les notes de la page d'essai, dans les fichiers de l'hôte et dans la file
-  // du navigateur (reconnues par leur titre), même après un échec.
+  // du navigateur (reconnues par leur titre), même après un échec. La langue d'avant revient d'abord.
+  await restoreLang?.().catch((error: Error) => console.error(`warning: language not restored (${error.message})`));
   await (await openAgentStore(await loadConfig())).clear({ state: "all", urlPrefix: url });
   const cleanup = await connectCdp(CDP_URL);
   try {

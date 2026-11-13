@@ -3,15 +3,17 @@
 // coordonnées 0..1 ; le service worker les incruste dans le gros plan à l'enregistrement.
 
 import { MAX_STROKES, drawStrokes, type DrawColor, type DrawTool, type Stroke } from "../../../src/core/drawing.ts";
+import { t, type Key } from "../../../src/core/i18n.ts";
 
-const TOOLS: Array<[DrawTool, string]> = [
-  ["arrow", "Flèche"],
-  ["rect", "Rectangle"],
-  ["pen", "Stylo"],
+/** Des clés, lues à la création de chaque calque : la langue a pu changer depuis le chargement. */
+const TOOLS: Array<[DrawTool, Key]> = [
+  ["arrow", "draw.arrow"],
+  ["rect", "draw.rect"],
+  ["pen", "draw.pen"],
 ];
-const COLORS: Array<[DrawColor, string]> = [
-  ["red", "Rouge"],
-  ["yellow", "Jaune"],
+const COLORS: Array<[DrawColor, Key]> = [
+  ["red", "draw.red"],
+  ["yellow", "draw.yellow"],
 ];
 /** Écart minimal entre deux points du stylo, en px d'écran : garde le dessin léger. */
 const MIN_STEP_PX = 2;
@@ -40,7 +42,7 @@ export class DrawingPad {
     this.#canvas.className = "preview drawable";
     this.#canvas.width = image.width;
     this.#canvas.height = image.height;
-    this.#canvas.setAttribute("aria-label", "Capture de la zone, dessine dessus avec la souris");
+    this.#canvas.setAttribute("aria-label", t("draw.canvas"));
     const scale = Math.min(1, displayWidth / image.width, 360 / image.height);
     this.#canvas.style.width = `${Math.round(image.width * scale)}px`;
     this.#canvas.style.height = `${Math.round(image.height * scale)}px`;
@@ -48,7 +50,7 @@ export class DrawingPad {
     const toolbar = document.createElement("div");
     toolbar.className = "toolbar";
     toolbar.setAttribute("role", "toolbar");
-    toolbar.setAttribute("aria-label", "Outils de dessin");
+    toolbar.setAttribute("aria-label", t("draw.tools"));
     const toolButtons: HTMLButtonElement[] = [];
     const colorButtons: HTMLButtonElement[] = [];
     const sync = () => {
@@ -56,7 +58,7 @@ export class DrawingPad {
       colorButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(COLORS[i]![0] === this.#color)));
     };
     for (const [tool, label] of TOOLS) {
-      const b = button(label);
+      const b = button(t(label));
       b.addEventListener("click", () => {
         this.#tool = tool;
         sync();
@@ -64,14 +66,14 @@ export class DrawingPad {
       toolButtons.push(b);
     }
     for (const [color, label] of COLORS) {
-      const b = button(label, `tool swatch ${color}`);
+      const b = button(t(label), `tool swatch ${color}`);
       b.addEventListener("click", () => {
         this.#color = color;
         sync();
       });
       colorButtons.push(b);
     }
-    const undo = button("Annuler le trait");
+    const undo = button(t("draw.undo"));
     undo.addEventListener("click", () => {
       this.#strokes.pop();
       this.#render();

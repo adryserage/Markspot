@@ -9,6 +9,7 @@ import { chromium, type CDPSession, type Page } from "playwright-core";
 import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
 const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
@@ -51,6 +52,7 @@ const cdp = await browser.newBrowserCDPSession();
 const context = browser.contexts()[0]!;
 const agent = await openAgentStore(await loadConfig());
 let page: Page | undefined;
+let restoreLang: (() => Promise<void>) | undefined;
 try {
   await cdp.send("Extensions.loadUnpacked", { path: resolve("extension") });
   const ready = await connectCdp(CDP_URL);
@@ -62,6 +64,7 @@ try {
   } finally {
     ready.close();
   }
+  restoreLang = await useFrench(CDP_URL, EXTENSION_ID);
   const opened = context.waitForEvent("page", (p) => p.url().startsWith(url));
   await cdp.send("Target.createTarget", { url, newWindow: true });
   page = await opened;
@@ -121,6 +124,7 @@ try {
   console.log("ok: note deleted from the menu");
   console.log("edit and delete test passed");
 } finally {
+  await restoreLang?.().catch((error: Error) => console.error(`warning: language not restored (${error.message})`));
   await agent.clear({ state: "all", urlPrefix: url }).catch((error: Error) => console.error(`warning: clear ${url} by hand (${error.message})`));
   await page?.close().catch(() => undefined);
   await browser.close().catch(() => undefined);

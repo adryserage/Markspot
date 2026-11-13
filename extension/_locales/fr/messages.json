@@ -1,0 +1,11 @@
+{
+  "extDescription": {
+    "message": "Marque un endroit d’une page et laisse une note pour Claude Code."
+  },
+  "actionTitle": {
+    "message": "Markspot : annoter cette page (Alt+C)"
+  },
+  "commandToggle": {
+    "message": "Activer ou couper le mode annotation"
+  }
+}

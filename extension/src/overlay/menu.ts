@@ -2,6 +2,7 @@
 // de la page, un clic va à la note, « Modifier » change le commentaire d'une note ouverte,
 // et « Effacer les notes réglées » retire celles que Claude a déjà réglées.
 
+import { t, type Key } from "../../../src/core/i18n.ts";
 import type { PublicListener, SendTarget } from "../../../src/core/protocol.ts";
 import type { NoteView } from "../messages.ts";
 
@@ -40,12 +41,12 @@ export function commentForm(
   field.value = note.annotation.comment;
   field.rows = 3;
   field.maxLength = 4000;
-  field.setAttribute("aria-label", `Commentaire de la note ${note.annotation.seq}`);
+  field.setAttribute("aria-label", t("menu.commentLabel", { seq: note.annotation.seq }));
   const message = el("p", "hint");
   const actions = el("div", "actions");
-  const cancel = el("button", "ghost", "Annuler");
+  const cancel = el("button", "ghost", t("common.cancel"));
   cancel.type = "button";
-  const save = el("button", "primary", "Enregistrer");
+  const save = el("button", "primary", t("common.save"));
   save.type = "submit";
   actions.append(cancel, save);
   form.append(field, message, actions);
@@ -61,7 +62,7 @@ export function commentForm(
     const error = await handlers.save(comment);
     save.disabled = false;
     if (error) {
-      message.textContent = `Non enregistré : ${error}`;
+      message.textContent = t("common.notSaved", { error });
       message.classList.add("error");
       return;
     }
@@ -71,7 +72,9 @@ export function commentForm(
 }
 
 export type NoteState = "pending" | "open" | "resolved";
-export const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
+const STATE_KEY: Record<NoteState, Key> = { pending: "state.pending", open: "state.open", resolved: "state.resolved" };
+/** Lu à chaque rendu : la langue peut changer pendant que la page est ouverte. */
+export const stateLabel = (state: NoteState): string => t(STATE_KEY[state]);
 /** Une note réglée s'affiche réglée, même si elle attend encore le programme local. */
 export const stateOf = (note: NoteView): NoteState => (note.resolution ? "resolved" : note.pending ? "pending" : "open");
 
@@ -98,38 +101,41 @@ export class NotesMenu {
   readonly element = el("div", "menu");
   readonly #toggle = el("button", "menu-toggle");
   readonly #quick = el("div", "quick");
-  readonly #quickSend = el("button", "quick-button send", "Envoyer à Claude");
-  readonly #sendInPanel = el("button", "primary menu-clear", "Envoyer à Claude");
+  readonly #quickSend = el("button", "quick-button send");
+  readonly #sendInPanel = el("button", "primary menu-clear");
   readonly #target = el("label", "menu-target");
   readonly #targetSelect = el("select", "menu-target-select");
   /** Rangée « Envoyer à » + « Rafraîchir » : le bouton reste hors du label du choix. */
   readonly #targetRow = el("div", "menu-target-row");
-  readonly #refresh = el("button", "ghost small", "Rafraîchir");
+  readonly #refresh = el("button", "ghost small");
   #refreshing = false;
   #targetFocused = false;
   /** La session de chaque option, par sa position : aucune option réelle ne vaut "" comme le choix vide. */
   #targetOptions: SendTarget[] = [];
   #canSend = true;
-  readonly #quickResolve = el("button", "quick-button", "Tout régler");
-  readonly #quickExport = el("button", "quick-button", "Exporter");
-  readonly #quickClear = el("button", "quick-button", "Effacer réglées");
-  readonly #quickClearAll = el("button", "quick-button danger", "Tout effacer");
+  readonly #quickResolve = el("button", "quick-button");
+  readonly #quickExport = el("button", "quick-button");
+  readonly #quickClear = el("button", "quick-button");
+  readonly #quickClearAll = el("button", "quick-button danger");
   readonly #undo = el("div", "quick-undo");
   readonly #undoText = el("span", "", "");
-  readonly #undoButton = el("button", "ghost small", "Annuler");
+  readonly #undoButton = el("button", "ghost small");
   #undoNotes: NoteView[] = [];
   #undoTimer = 0;
   readonly #panel = el("div", "menu-panel");
   readonly #list = el("ol", "menu-list");
-  readonly #clear = el("button", "ghost menu-clear", "Effacer les notes réglées");
-  readonly #clearAll = el("button", "ghost menu-clear danger", "Tout effacer sur cette page");
+  readonly #clear = el("button", "ghost menu-clear");
+  readonly #clearAll = el("button", "ghost menu-clear danger");
   readonly #confirm = el("div", "menu-confirm");
   readonly #confirmText = el("p", "", "");
-  readonly #no = el("button", "primary", "Non, garder");
-  readonly #yes = el("button", "ghost danger", "Oui, effacer");
+  readonly #no = el("button", "primary");
+  readonly #yes = el("button", "ghost danger");
   readonly #message = el("p", "hint");
   /** Le programme local manque : comment l'installer. */
   readonly #install = el("div", "menu-install");
+  /** « Envoyer à », devant le choix de la session. */
+  readonly #targetLabel = el("span", "");
+  #hostMissing = false;
   #notes: NoteView[] = [];
   #open = false;
   #editing = false;
@@ -163,9 +169,8 @@ export class NotesMenu {
     this.#install.hidden = true;
     this.#panel.append(this.#install, this.#list, this.#message, this.#targetRow, this.#sendInPanel, this.#clear, this.#clearAll, this.#confirm);
 
-    this.#target.append(el("span", "", "Envoyer à"), this.#targetSelect);
+    this.#target.append(this.#targetLabel, this.#targetSelect);
     this.#refresh.type = "button";
-    this.#refresh.title = "Relire les sessions Claude qui écoutent";
     this.#refresh.addEventListener("click", (e) => {
       if (e.isTrusted) void this.#refreshTargets(true);
     });
@@ -192,7 +197,7 @@ export class NotesMenu {
     this.#quickExport.addEventListener("click", async (e) => {
       if (!e.isTrusted) return;
       const error = await this.actions.openExport();
-      if (error) this.#say(`Export impossible : ${error}`, true);
+      if (error) this.#say(t("common.exportFailed", { error }), true);
     });
     this.#quickClear.addEventListener("click", (e) => {
       if (e.isTrusted) void this.#clearResolved();
@@ -212,7 +217,45 @@ export class NotesMenu {
     const top = el("div", "menu-top");
     top.append(this.#quick, this.#toggle);
     this.element.append(top, this.#undo, this.#panel);
+    this.#labelFixed();
     this.update([]);
+  }
+
+  /** Les textes des boutons posés une fois pour toutes dans le constructeur. */
+  #labelFixed(): void {
+    const labels: Array<[HTMLElement, Key]> = [
+      [this.#quickSend, "menu.sendToClaude"],
+      [this.#sendInPanel, "menu.sendToClaude"],
+      [this.#refresh, "menu.refresh"],
+      [this.#quickResolve, "menu.resolveAll"],
+      [this.#quickExport, "menu.export"],
+      [this.#quickClear, "menu.clearResolvedShort"],
+      [this.#quickClearAll, "menu.clearAllShort"],
+      [this.#undoButton, "menu.undo"],
+      [this.#clear, "menu.clearResolved"],
+      [this.#clearAll, "menu.clearAll"],
+      [this.#no, "menu.keep"],
+      [this.#yes, "menu.yesClear"],
+      [this.#targetLabel, "menu.sendTo"],
+    ];
+    for (const [node, key] of labels) node.textContent = t(key);
+    this.#refresh.title = t("menu.refreshTitle");
+  }
+
+  /**
+   * La langue a changé : boutons fixes, compte, liste (sauf pendant une modification), aide à
+   * l'installation et choix de la session. Le message affiché et l'annulation gardent leur texte.
+   */
+  relabel(): void {
+    this.#labelFixed();
+    if (this.#install.childElementCount > 0) {
+      this.#install.replaceChildren();
+      this.setHostMissing(this.#hostMissing);
+    }
+    const confirming = !this.#confirm.hidden;
+    this.update(this.#notes);
+    if (confirming) this.#askClearAll();
+    if (this.#open) void this.#refreshTargets();
   }
 
   /** Une modification, une confirmation ou la liste des sessions est en cours : Échap s'arrête là. */
@@ -222,7 +265,7 @@ export class NotesMenu {
 
   update(notes: NoteView[]): void {
     this.#notes = notes;
-    this.#toggle.textContent = notes.length === 1 ? "1 note" : `${notes.length} notes`;
+    this.#toggle.textContent = t("menu.count", { count: notes.length });
     this.#toggle.disabled = notes.length === 0;
     this.#clear.hidden = !notes.some((n) => stateOf(n) === "resolved");
     this.#clearAll.hidden = notes.length === 0;
@@ -250,25 +293,26 @@ export class NotesMenu {
   /** Version d'essai (pas de programme local) : pas de bouton « Envoyer à Claude ». */
   /** Sans programme local, les notes restent dans le navigateur : on dit comment l'installer. */
   setHostMissing(missing: boolean): void {
+    this.#hostMissing = missing;
     this.#install.hidden = !missing;
     if (!missing || this.#install.childElementCount > 0) return;
     const command = "npm install -g markspot && markspot install";
     const code = el("code", "", command);
-    const copy = el("button", "ghost small", "Copier");
+    const copy = el("button", "ghost small", t("menu.copy"));
     copy.type = "button";
     copy.addEventListener("click", (e) => {
       if (!e.isTrusted) return;
       void navigator.clipboard.writeText(command).then(
-        () => (copy.textContent = "Copié"),
-        () => (copy.textContent = "Sélectionne la commande"),
+        () => (copy.textContent = t("menu.copied")),
+        () => (copy.textContent = t("menu.selectCommand")),
       );
     });
     this.#install.append(
-      el("strong", "", "Installer Markspot sur ce poste"),
-      el("p", "", "Le programme local n'est pas installé : tes notes restent dans ce navigateur. Dans un terminal :"),
+      el("strong", "", t("menu.installTitle")),
+      el("p", "", t("menu.installText")),
       code,
       copy,
-      el("p", "", "Puis recharge la page. Claude Code pourra lire tes notes."),
+      el("p", "", t("menu.installAfter")),
     );
   }
 
@@ -315,19 +359,19 @@ export class NotesMenu {
     }
     const hostsOf = (name: string) => new Set([...groups.values()].filter((g) => g.target.name === name).map((g) => g.target.host));
     const label = (t: SendTarget) => (t.host && hostsOf(t.name).size > 1 ? `${t.name} (${t.host})` : t.name);
-    const options: HTMLOptionElement[] = [new Option(groups.size === 0 ? "Aucune session n'écoute" : "Choisir la session", "")];
+    const options: HTMLOptionElement[] = [new Option(groups.size === 0 ? t("menu.noListener") : t("menu.chooseSession"), "")];
     this.#targetOptions = [];
     let selected = "";
     for (const { target, count } of groups.values()) {
       if (!target.name) {
         // Écoute d'une ancienne version, sans nom : on ne peut pas la viser.
-        const old = new Option("(session sans nom : mets markspot à jour)", "");
+        const old = new Option(t("menu.unnamedSession"), "");
         old.disabled = true;
         options.push(old);
         continue;
       }
       const value = String(this.#targetOptions.push(target) - 1);
-      options.push(new Option(count > 1 ? `${label(target)} (${count} sessions)` : label(target), value));
+      options.push(new Option(count > 1 ? t("menu.sessionCount", { label: label(target), count }) : label(target), value));
       if (chosen && chosen.name === target.name && (chosen.host ? chosen.host === target.host : hostsOf(target.name).size === 1)) {
         selected = value;
       }
@@ -335,7 +379,7 @@ export class NotesMenu {
     const projects = this.#targetOptions.length;
     if (chosen && !listeners.some((l) => l.name === chosen.name && (!chosen.host || l.host === chosen.host))) {
       const value = String(this.#targetOptions.push(chosen) - 1);
-      options.push(new Option(`${chosen.host ? `${chosen.name} (${chosen.host})` : chosen.name} (n'écoute pas)`, value));
+      options.push(new Option(t("menu.notListening", { label: chosen.host ? `${chosen.name} (${chosen.host})` : chosen.name }), value));
       selected = value;
     }
     if (!chosen && projects === 1) selected = "0";
@@ -343,9 +387,7 @@ export class NotesMenu {
     this.#targetSelect.value = selected;
     if (byHand) {
       this.#say(
-        groups.size === 0
-          ? "Aucune session n'écoute : lance « markspot claude », ou dis « écoute mes annotations » à la session."
-          : `${projects} session${projects > 1 ? "s" : ""} à l'écoute.`,
+        groups.size === 0 ? t("menu.noListenerHelp") : t("menu.listening", { count: projects }),
         false,
       );
     }
@@ -368,7 +410,7 @@ export class NotesMenu {
     if (done.length === 0) return;
     // L'annulation vit ici, hors de update() : les notes poussées pendant la boucle ne l'effacent pas.
     this.#undoNotes = done;
-    this.#undoText.textContent = done.length === 1 ? "1 note réglée." : `${done.length} notes réglées.`;
+    this.#undoText.textContent = t("menu.resolvedUndo", { count: done.length });
     this.#undo.hidden = false;
     clearTimeout(this.#undoTimer);
     this.#undoTimer = setTimeout(() => this.#hideUndo(), UNDO_MS) as unknown as number;
@@ -379,7 +421,7 @@ export class NotesMenu {
     this.#hideUndo();
     let failed = 0;
     for (const note of notes) if (await this.actions.setResolved(note, false)) failed++;
-    if (failed > 0) this.#say(`${failed} note(s) non rouverte(s) : Claude y a peut-être répondu entre-temps.`, true);
+    if (failed > 0) this.#say(t("menu.notReopened", { count: failed }), true);
   }
 
   #hideUndo(): void {
@@ -401,10 +443,7 @@ export class NotesMenu {
 
   #askClearAll(): void {
     const n = this.#notes.length;
-    this.#confirmText.textContent =
-      n === 1
-        ? "Effacer la note de cette page ? Elle disparaît pour de bon."
-        : `Effacer les ${n} notes de cette page ? Elles disparaissent pour de bon, même celles qui ne sont pas réglées.`;
+    this.#confirmText.textContent = t("menu.confirmClearAll", { count: n });
     this.#clearAll.hidden = true;
     this.#confirm.hidden = false;
     this.#no.focus();
@@ -420,7 +459,7 @@ export class NotesMenu {
     const error = await this.actions.clearAll(this.#notes);
     this.#yes.disabled = false;
     this.#cancelClearAll();
-    this.#message.textContent = error ? `Non effacé : ${error}` : "";
+    this.#message.textContent = error ? t("common.notCleared", { error }) : "";
     this.#message.classList.toggle("error", Boolean(error));
   }
 
@@ -443,32 +482,32 @@ export class NotesMenu {
     const item = el("li", "menu-item");
     const go = el("button", "menu-go");
     go.type = "button";
-    go.setAttribute("aria-label", `Aller à la note ${note.annotation.seq}`);
+    go.setAttribute("aria-label", t("menu.goTo", { seq: note.annotation.seq }));
     go.append(
       el("span", `menu-seq ${state}`, String(note.annotation.seq)),
       menuComment(note.annotation.comment),
     );
     go.addEventListener("click", () => this.actions.goTo(note));
     const side = el("div", "menu-side");
-    side.append(el("span", `state ${state}`, STATE_LABEL[state]));
-    const toggle = el("button", "ghost small", state === "resolved" ? "Rouvrir" : "Marquer réglée");
+    side.append(el("span", `state ${state}`, stateLabel(state)));
+    const toggle = el("button", "ghost small", t(state === "resolved" ? "common.reopen" : "common.markResolved"));
     toggle.type = "button";
     toggle.addEventListener("click", async (e) => {
       if (!e.isTrusted) return;
       toggle.disabled = true;
       const error = await this.actions.setResolved(note, state !== "resolved");
       toggle.disabled = false;
-      this.#message.textContent = error ? `Non changé : ${error}` : "";
+      this.#message.textContent = error ? t("common.notChanged", { error }) : "";
       this.#message.classList.toggle("error", Boolean(error));
     });
     side.append(toggle);
     if (state !== "resolved") {
-      const edit = el("button", "ghost small", "Modifier");
+      const edit = el("button", "ghost small", t("common.edit"));
       edit.type = "button";
       edit.addEventListener("click", () => this.#startEdit(item, note));
       side.append(edit);
     }
-    const remove = el("button", "ghost small danger-text", "Supprimer");
+    const remove = el("button", "ghost small danger-text", t("common.delete"));
     remove.type = "button";
     remove.addEventListener("click", (e) => {
       if (e.isTrusted) this.#confirmDelete(item, note);
@@ -493,9 +532,9 @@ export class NotesMenu {
   #confirmDelete(item: HTMLLIElement, note: NoteView): void {
     this.#editing = true;
     const box = el("div", "menu-delete");
-    const text = el("p", "", `Supprimer la note ${note.annotation.seq} ?`);
-    const yes = el("button", "danger", "Oui, supprimer");
-    const no = el("button", "ghost", "Non");
+    const text = el("p", "", t("menu.confirmDelete", { seq: note.annotation.seq }));
+    const yes = el("button", "danger", t("menu.yesDelete"));
+    const no = el("button", "ghost", t("common.no"));
     yes.type = "button";
     no.type = "button";
     const answers = el("div", "actions");
@@ -512,7 +551,7 @@ export class NotesMenu {
       const error = await this.actions.clearOne(note);
       yes.disabled = false;
       if (error) {
-        text.textContent = `Non supprimée : ${error}`;
+        text.textContent = t("common.notDeleted", { error });
         text.classList.add("error");
         return;
       }
@@ -526,7 +565,7 @@ export class NotesMenu {
     this.#clear.disabled = true;
     const error = await this.actions.clearResolved(resolved);
     this.#clear.disabled = false;
-    this.#message.textContent = error ? `Non effacé : ${error}` : "";
+    this.#message.textContent = error ? t("common.notCleared", { error }) : "";
     this.#message.classList.toggle("error", Boolean(error));
   }
 }
