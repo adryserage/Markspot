@@ -13,6 +13,7 @@ import {
   cleanName,
   commentHash,
   completeClaim,
+  pendingWork,
   releaseClaim,
   removeBeat,
   type Dispatch,
@@ -79,6 +80,8 @@ export function startWaitListener(options: {
         timer = setInterval(() => void tick(), beatMs);
         timer.unref();
       }
+      // File vide : une lecture du dossier, sans écrire sur le partage toutes les 2 s.
+      if ((await pendingWork(dataDir)) === "") return null;
       for (;;) {
         const dispatch = await claimNext(dataDir, me, auth);
         if (!dispatch) return null;
