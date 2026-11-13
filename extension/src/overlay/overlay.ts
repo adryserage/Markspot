@@ -5,11 +5,13 @@
 
 import { fromBase64 } from "../../../src/core/base64.ts";
 import { clampToViewport, contains, visiblePart } from "../../../src/core/geometry.ts";
+import { currentLang, parseLangChoice, setLang, t, type Lang } from "../../../src/core/i18n.ts";
 import type { Annotation, Mark, PageRect, Rect, Viewport, ViewportRect } from "../../../src/core/model.ts";
+import { LANG_KEY, langOf } from "../lang.ts";
 import { OVERLAY_PORT, ask, type NoteView, type OverlayPush } from "../messages.ts";
 import { describeElement } from "./anchor.ts";
 import { DrawingPad } from "./drawing-pad.ts";
-import { commentForm, NotesMenu, STATE_LABEL, stateOf } from "./menu.ts";
+import { commentForm, NotesMenu, stateLabel, stateOf } from "./menu.ts";
 import css from "./overlay.css";
 
 const DRAG_THRESHOLD = 6;
@@ -89,6 +91,11 @@ class Overlay {
   #mode: Mode = "idle";
   /** Annule une modification ou une suppression en cours dans la fiche (Échap). */
   #cardCancel: (() => void) | null = null;
+  /** La note dont la fiche est ouverte : rouverte dans la nouvelle langue si elle change. */
+  #cardNote: NoteView | null = null;
+  /** Le message de la barre, relu si la langue change. */
+  #barMessage: (() => string) | null = null;
+  #barKey = false;
   #notes: NoteView[] = [];
   #port: chrome.runtime.Port | null = null;
   #target: Element | null = null;
@@ -112,16 +119,11 @@ class Overlay {
       resolveAll: (notes) => this.#resolveAll(notes),
       sendToClaude: async (notes) => {
         const reply = await ask({ type: "send", ids: notes.map((n) => n.annotation.id) });
-        if (!reply.ok) return { text: `Non envoyé : ${reply.error}`, error: true };
-        if (reply.type === "choose") {
-          return { text: "Plusieurs sessions écoutent : choisis-en une dans « Envoyer à », puis renvoie.", error: true, choose: true };
-        }
-        if (reply.type !== "sent") return { text: "Non envoyé : réponse inattendue", error: true };
-        const what = reply.count === 1 ? "1 note envoyée" : `${reply.count} notes envoyées`;
+        if (!reply.ok) return { text: t("overlay.notSent", { error: reply.error }), error: true };
+        if (reply.type === "choose") return { text: t("overlay.chooseSession"), error: true, choose: true };
+        if (reply.type !== "sent") return { text: t("overlay.notSent", { error: t("common.unexpected") }), error: true };
         const to = reply.host ? `${reply.to} (${reply.host})` : reply.to;
-        return reply.listening > 0
-          ? { text: `${what} à ${to}.`, error: false }
-          : { text: `${what} à ${to}, qui n'écoute pas en ce moment : la session les prendra dès qu'elle écoutera.`, error: false };
+        return { text: t(reply.listening > 0 ? "overlay.sent" : "overlay.sentNotListening", { count: reply.count, to }), error: false };
       },
       loadTargets: async () => {
         const reply = await ask({ type: "targets" });
@@ -184,6 +186,11 @@ class Overlay {
     addEventListener("keydown", (e) => this.#onKey(e), true);
     addEventListener("scroll", () => this.#schedule(), { capture: true, passive: true });
     addEventListener("resize", () => this.#schedule(), { passive: true });
+    // Repli si le port est fermé (service worker endormi) : le choix gardé change aussi ici.
+    chrome.storage.onChanged.addListener((changes, area) => {
+      const change = changes[LANG_KEY];
+      if (area === "local" && change) this.#applyLang(langOf(parseLangChoice(change.newValue)));
+    });
     loadFonts();
   }
 
@@ -191,12 +198,30 @@ class Overlay {
     if (this.#mode === "idle") {
       this.#listen();
       const status = await ask({ type: "status" });
+      if (status.ok && status.type === "status") this.#applyLang(status.lang);
       this.#menu.setCanSend(status.ok && status.type === "status" && status.native);
       this.#menu.setHostMissing(status.ok && status.type === "status" && status.missing);
       await this.#refresh();
       this.#startPicking();
     } else {
       this.#stop();
+    }
+  }
+
+  /**
+   * Change la langue de ce qui est affiché : la barre, le menu, la fiche ouverte. Une boîte de
+   * nouvelle note ou une modification en cours restent telles quelles : le texte tapé ne se perd pas.
+   */
+  #applyLang(lang: Lang): void {
+    if (lang === currentLang()) return;
+    setLang(lang);
+    if (!this.#bar.hidden) this.#renderBar();
+    this.#menu.relabel();
+    if (this.#cardNote && !this.#cardCancel) {
+      const id = this.#cardNote.annotation.id;
+      const fresh = this.#notes.find((n) => n.annotation.id === id);
+      this.#closePanel();
+      if (fresh) void this.#openCard(fresh);
     }
   }
 
@@ -208,7 +233,7 @@ class Overlay {
     this.#layer.classList.add("active");
     this.#pins.hidden = false;
     this.#menu.element.hidden = false;
-    this.#showBar("Clique sur un élément ou trace une zone.", true);
+    this.#showBar(() => t("overlay.pickHint"), true);
   }
 
   #stop(): void {
@@ -281,7 +306,7 @@ class Overlay {
     if (!this.#target) return;
     place(this.#highlight, toRect(this.#target.getBoundingClientRect()));
     const text = (this.#target as HTMLElement).innerText?.replace(/\s+/g, " ").trim().slice(0, 32);
-    this.#label.textContent = text ? `${this.#target.localName} « ${text} »` : this.#target.localName;
+    this.#label.textContent = text ? t("overlay.element", { tag: this.#target.localName, text }) : this.#target.localName;
     this.#highlight.hidden = false;
   }
 
@@ -359,7 +384,8 @@ class Overlay {
     }
     if (!reply.ok || reply.type !== "captured") {
       this.#startPicking();
-      this.#showBar(`Capture impossible : ${reply.ok ? "réponse inattendue" : reply.error}`, false);
+      const error = reply.ok ? null : reply.error;
+      this.#showBar(() => t("overlay.captureFailed", { error: error ?? t("common.unexpected") }), false);
       return;
     }
     this.#draftId = reply.draftId;
@@ -371,7 +397,7 @@ class Overlay {
   async #openComposer(mark: Mark, viewport: Viewport, zone: Rect, png: string): Promise<void> {
     const panel = el("form", "panel composer wide");
     const bar = el("div", "panel-bar");
-    bar.append(el("span", "panel-title", "Nouvelle note"), el("span", "grip"));
+    bar.append(el("span", "panel-title", t("overlay.newNote")), el("span", "grip"));
     let pad: DrawingPad | null = null;
     let capture: HTMLElement;
     try {
@@ -391,15 +417,15 @@ class Overlay {
       return;
     }
     const field = el("textarea", "comment");
-    field.placeholder = "Qu'est-ce qui ne va pas ici ?";
+    field.placeholder = t("overlay.placeholder");
     field.rows = 3;
     field.maxLength = 4000;
-    field.setAttribute("aria-label", "Commentaire");
-    const hint = el("p", "hint", "Entrée enregistre, Maj+Entrée va à la ligne.");
+    field.setAttribute("aria-label", t("overlay.comment"));
+    const hint = el("p", "hint", t("overlay.enterHint"));
     const actions = el("div", "actions");
-    const cancel = el("button", "ghost", "Annuler");
+    const cancel = el("button", "ghost", t("common.cancel"));
     cancel.type = "button";
-    const save = el("button", "primary", "Enregistrer la note");
+    const save = el("button", "primary", t("overlay.saveNote"));
     save.type = "submit";
     actions.append(cancel, save);
     panel.append(bar, capture, field, hint, actions);
@@ -423,14 +449,15 @@ class Overlay {
       });
       save.disabled = false;
       if (!reply.ok || reply.type !== "saved") {
-        hint.textContent = `Note non enregistrée : ${reply.ok ? "réponse inattendue" : reply.error}`;
+        hint.textContent = t("overlay.noteNotSaved", { error: reply.ok ? t("common.unexpected") : reply.error });
         hint.classList.add("error");
         return;
       }
       this.#draftId = null;
       this.#upsert(reply.note);
       this.#startPicking();
-      this.#showBar(`Note ${reply.note.annotation.seq} enregistrée. Clique ailleurs pour en ajouter une.`, true);
+      const seq = reply.note.annotation.seq;
+      this.#showBar(() => t("overlay.noteSaved", { seq }), true);
     };
     panel.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -488,7 +515,7 @@ class Overlay {
     };
     bar.tabIndex = 0;
     bar.setAttribute("role", "button");
-    bar.setAttribute("aria-label", "Déplacer le panneau : glisser, ou flèches du clavier. Double-clic pour le remettre en place.");
+    bar.setAttribute("aria-label", t("overlay.movePanel"));
     // Garde le focus dans le champ de commentaire pendant le glissement.
     bar.addEventListener("mousedown", (e) => e.preventDefault());
     bar.addEventListener("pointerdown", (e) => {
@@ -542,20 +569,28 @@ class Overlay {
 
   #closePanel(): void {
     this.#cardCancel = null;
+    this.#cardNote = null;
     this.#panelListeners?.abort();
     this.#panelListeners = null;
     this.#panel?.remove();
     this.#panel = null;
   }
 
-  #showBar(message: string, withKey: boolean): void {
-    this.#bar.replaceChildren(el("span", "", message));
-    if (withKey) {
+  /** message est relu à chaque rendu : la barre suit un changement de langue. */
+  #showBar(message: () => string, withKey: boolean): void {
+    this.#barMessage = message;
+    this.#barKey = withKey;
+    this.#renderBar();
+    this.#bar.hidden = false;
+  }
+
+  #renderBar(): void {
+    this.#bar.replaceChildren(el("span", "", this.#barMessage?.() ?? ""));
+    if (this.#barKey) {
       const key = el("span", "key-hint");
-      key.append(el("kbd", "", "Échap"), document.createTextNode(" pour sortir"));
+      key.append(el("kbd", "", t("overlay.escKey")), document.createTextNode(t("overlay.toExit")));
       this.#bar.append(key);
     }
-    this.#bar.hidden = false;
   }
 
   // -------------------------------------------------------------- pins
@@ -593,6 +628,7 @@ class Overlay {
     port.onMessage.addListener((push: OverlayPush) => {
       if (push.type === "note") this.#upsert(push.note);
       else if (push.type === "removed") this.#remove([push.id]);
+      else if (push.type === "lang") this.#applyLang(push.lang);
       else this.#menu.notify(push.text);
     });
     port.onDisconnect.addListener(() => {
@@ -635,7 +671,7 @@ class Overlay {
   async #edit(note: NoteView, comment: string): Promise<string | null> {
     const reply = await ask({ type: "edit", id: note.annotation.id, comment });
     if (!reply.ok) return reply.error;
-    if (reply.type !== "edited") return "réponse inattendue";
+    if (reply.type !== "edited") return t("common.unexpected");
     this.#upsert(reply.note);
     return null;
   }
@@ -644,19 +680,19 @@ class Overlay {
   async #clearOne(note: NoteView): Promise<string | null> {
     const reply = await ask({ type: "clear", ids: [note.annotation.id], includeOpen: true });
     if (!reply.ok) return reply.error;
-    if (reply.type !== "cleared") return "réponse inattendue";
+    if (reply.type !== "cleared") return t("common.unexpected");
     this.#remove(reply.ids);
     if (reply.ids.includes(note.annotation.id)) return null;
-    return reply.error ?? "note introuvable : recharge la page";
+    return reply.error ?? t("overlay.noteNotFound");
   }
 
   async #clearNotes(notes: NoteView[], includeOpen: boolean): Promise<string | null> {
     const reply = await ask({ type: "clear", ids: notes.map((n) => n.annotation.id), includeOpen });
     if (!reply.ok) return reply.error;
-    if (reply.type !== "cleared") return "réponse inattendue";
+    if (reply.type !== "cleared") return t("common.unexpected");
     // Même en erreur, les notes déjà retirées disparaissent de la page.
     this.#remove(reply.ids);
-    return reply.error ? `${reply.ids.length} effacée(s), les autres restent : ${reply.error}` : null;
+    return reply.error ? t("overlay.partlyCleared", { count: reply.ids.length, error: reply.error }) : null;
   }
 
   /** Une à une, dans l'ordre : le worker sait si chaque note est en file ou chez le programme local. */
@@ -666,7 +702,7 @@ class Overlay {
       if (!(await this.#setResolved(note, true))) done.push(note);
     }
     const missed = notes.length - done.length;
-    return { done, error: missed > 0 ? `${done.length} réglée(s), ${missed} non : réessaie dans un instant.` : null };
+    return { done, error: missed > 0 ? t("overlay.partlyResolved", { done: done.length, missed }) : null };
   }
 
   async #setResolved(note: NoteView, resolved: boolean): Promise<string | null> {
@@ -674,7 +710,7 @@ class Overlay {
       resolved ? { type: "resolve", id: note.annotation.id, reply: "" } : { type: "reopen", id: note.annotation.id },
     );
     if (!reply.ok) return reply.error;
-    if (reply.type !== "state") return "réponse inattendue";
+    if (reply.type !== "state") return t("common.unexpected");
     this.#upsert(reply.note);
     return null;
   }
@@ -685,7 +721,10 @@ class Overlay {
         const { annotation } = note;
         const pin = el("button", `pin ${stateClass(note)}`, String(annotation.seq));
         pin.type = "button";
-        pin.setAttribute("aria-label", `Note ${annotation.seq}, ${STATE_LABEL[stateClass(note)]} : ${annotation.comment.slice(0, 60)}`);
+        pin.setAttribute(
+          "aria-label",
+          t("overlay.pinLabel", { seq: annotation.seq, state: stateLabel(stateClass(note)), comment: annotation.comment.slice(0, 60) }),
+        );
         const { x, y } = this.#pinPosition(annotation);
         pin.style.left = `${x}px`;
         pin.style.top = `${y}px`;
@@ -707,15 +746,15 @@ class Overlay {
     const { annotation, resolution } = note;
     const panel = el("div", "panel card");
     panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", `Note ${annotation.seq}`);
+    panel.setAttribute("aria-label", t("overlay.note", { seq: annotation.seq }));
     const head = el("div", "card-head panel-bar");
     const state = stateClass(note);
-    head.append(el("strong", "", `Note ${annotation.seq}`), el("span", `state ${state}`, STATE_LABEL[state]));
+    head.append(el("strong", "", t("overlay.note", { seq: annotation.seq })), el("span", `state ${state}`, stateLabel(state)));
     const comment = el("p", "card-comment", annotation.comment);
     const answer = resolution ? el("div", "card-reply") : null;
     if (answer && resolution) {
       answer.append(
-        el("strong", "", resolution.author.kind === "agent" ? "Réponse de Claude" : "Réglée par toi"),
+        el("strong", "", t(resolution.author.kind === "agent" ? "overlay.claudeReply" : "overlay.resolvedByYou")),
         el("p", "", resolution.reply),
       );
     }
@@ -723,14 +762,14 @@ class Overlay {
     const { anchor } = annotation.mark;
     const target = el("p", "card-target");
     target.append(
-      document.createTextNode(anchor.text ? `${anchor.tag} « ${anchor.text} »` : anchor.tag),
+      document.createTextNode(anchor.text ? t("overlay.element", { tag: anchor.tag, text: anchor.text }) : anchor.tag),
       el("code", "", anchor.selector),
     );
-    const close = el("button", "ghost", "Fermer");
+    const close = el("button", "ghost", t("common.close"));
     close.type = "button";
     close.addEventListener("click", () => this.#closePanel());
     // « Modifier » : le commentaire devient un champ ; enregistré, la fiche se rouvre à jour.
-    const editButton = resolution ? null : el("button", "ghost", "Modifier");
+    const editButton = resolution ? null : el("button", "ghost", t("common.edit"));
     if (editButton) {
       editButton.type = "button";
       editButton.addEventListener("click", (e) => {
@@ -757,7 +796,7 @@ class Overlay {
       });
     }
     // « Supprimer » : un second clic confirme ; Échap, « Modifier » ou 5 s sans clic annulent.
-    const remove = el("button", "ghost danger-text", "Supprimer");
+    const remove = el("button", "ghost danger-text", t("common.delete"));
     remove.type = "button";
     const problem = el("p", "hint error");
     problem.hidden = true;
@@ -765,14 +804,14 @@ class Overlay {
     const disarm = () => {
       clearTimeout(disarmTimer);
       remove.classList.remove("confirming");
-      remove.textContent = "Supprimer";
+      remove.textContent = t("common.delete");
     };
     remove.addEventListener("click", async (e) => {
       if (!e.isTrusted) return;
       problem.hidden = true;
       if (!remove.classList.contains("confirming")) {
         remove.classList.add("confirming");
-        remove.textContent = "Confirmer la suppression";
+        remove.textContent = t("overlay.confirmDelete");
         this.#cardCancel = disarm;
         disarmTimer = setTimeout(() => {
           disarm();
@@ -786,17 +825,17 @@ class Overlay {
       const error = await this.#clearOne(note);
       remove.disabled = false;
       if (error) {
-        problem.textContent = `Non supprimée : ${error}`;
+        problem.textContent = t("common.notDeleted", { error });
         problem.hidden = false;
       }
     });
-    const toggle = el("button", "ghost", resolution ? "Rouvrir" : "Marquer réglée");
+    const toggle = el("button", "ghost", t(resolution ? "common.reopen" : "common.markResolved"));
     toggle.type = "button";
     toggle.addEventListener("click", async (e) => {
       if (!e.isTrusted) return;
       const error = await this.#setResolved(note, !resolution);
       if (error) {
-        toggle.textContent = `Non changé : ${error}`;
+        toggle.textContent = t("common.notChanged", { error });
         return;
       }
       this.#closePanel();
@@ -813,6 +852,7 @@ class Overlay {
       },
       head,
     );
+    this.#cardNote = note;
     close.focus();
 
     const reply = await ask({ type: "thumbnail", id: annotation.id });

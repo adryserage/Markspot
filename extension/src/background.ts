@@ -17,8 +17,10 @@ import {
   type Thread,
 } from "../../src/core/model.ts";
 import { sanitizeStrokes } from "../../src/core/drawing.ts";
+import { currentLang, parseLangChoice, setLang, t, type Key, type LangChoice } from "../../src/core/i18n.ts";
 import type { SendTarget } from "../../src/core/protocol.ts";
 import { burnStrokes, captureTab } from "./capture.ts";
+import { LANG_KEY, langOf, readLangChoice } from "./lang.ts";
 import { sourceHintFor } from "./source-hint.ts";
 import { createHostLink } from "./link.ts";
 import {
@@ -52,6 +54,11 @@ function broadcast(push: OverlayPush, url: string): void {
     const portUrl = port.sender?.url;
     if (portUrl && pageKeyOf(portUrl) === key) port.postMessage(push);
   }
+}
+
+/** À tous les overlays ouverts, quelle que soit leur page. */
+function broadcastAll(push: OverlayPush): void {
+  for (const port of overlays) port.postMessage(push);
 }
 
 function hostView(thread: Thread): NoteView {
@@ -105,10 +112,8 @@ function flushOutbox(): Promise<void> {
         if (resolved.type === "resolved") thread = resolved.thread;
         else {
           // Hôte plus ancien qui refuse : la note part ouverte, et on le dit au lieu de se taire.
-          broadcast(
-            { type: "notice", text: `La note ${thread.annotation.seq} est arrivée ouverte : le programme local n'a pas pris ta résolution. Mets markspot à jour, puis règle-la à nouveau.` },
-            thread.annotation.page.url,
-          );
+          await ready;
+          broadcast({ type: "notice", text: t("worker.arrivedOpen", { seq: thread.annotation.seq }) }, thread.annotation.page.url);
         }
       }
       threads.set(thread.annotation.id, thread);
@@ -151,7 +156,7 @@ function clearOnPage(
     if (onHost.length > 0) {
       const reply = await host.request({ type: "clear", ids: onHost, includeOpen }).catch(() => null);
       // Les notes déjà retirées de la file le restent : on dit lesquelles, avec l'erreur.
-      if (reply?.type !== "cleared") return { ids: removed, error: "le programme local n'a pas répondu" };
+      if (reply?.type !== "cleared") return { ids: removed, error: t("worker.noAnswer") };
       for (const id of reply.ids) {
         const known = threads.get(id);
         threads.delete(id);
@@ -166,7 +171,7 @@ function clearOnPage(
 /** Vue d'une note encore en file, avec sa résolution locale. Diffusée aux onglets de sa page. */
 async function queuedView(id: AnnotationId): Promise<NoteView> {
   const annotation = (await allAnnotations()).find((a) => a.id === id);
-  if (!annotation) throw new Error("note introuvable");
+  if (!annotation) throw new Error(t("worker.noteNotFound"));
   const note: NoteView = { annotation, resolution: (await queuedResolutions()).get(id) ?? null, pending: true };
   broadcast({ type: "note", note }, annotation.page.url);
   return note;
@@ -213,8 +218,9 @@ async function injectOverlay(tab: chrome.tabs.Tab | undefined): Promise<void> {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/overlay.js"] });
     await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
   } catch {
+    await ready;
     await chrome.action.setBadgeText({ tabId: tab.id, text: "!" });
-    await chrome.action.setTitle({ tabId: tab.id, title: "Markspot ne peut pas annoter cette page." });
+    await chrome.action.setTitle({ tabId: tab.id, title: t("worker.cannotAnnotate") });
   }
 }
 
@@ -230,10 +236,11 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSender): Promise<OverlayReply> {
+  await ready; // la langue est lue avant le premier texte rendu à la page
   switch (request.type) {
     case "capture": {
       const windowId = sender.tab?.windowId;
-      if (windowId === undefined) return { ok: false, error: "No tab to capture." };
+      if (windowId === undefined) return { ok: false, error: t("worker.noTab") };
       const capture = await captureTab(windowId, request.zone, request.pageZone, request.viewport);
       const draftId = ulid();
       await putDraft(draftId, capture);
@@ -262,7 +269,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
     }
     case "edit": {
       const queued = await afterFlush(() => editQueued(request.id, request.comment.slice(0, 4000)));
-      if (queued === "resolved") return { ok: false, error: "note réglée : rouvre-la d'abord" };
+      if (queued === "resolved") return { ok: false, error: t("worker.reopenFirst") };
       if (queued) {
         const note: NoteView = { annotation: queued, resolution: null, pending: true };
         broadcast({ type: "note", note }, queued.page.url);
@@ -270,19 +277,20 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       }
       const reply = await host.request({ type: "edit", id: request.id, comment: request.comment.slice(0, 4000) });
       if (reply.type !== "edited") {
-        return { ok: false, error: reply.type === "rejected" && reply.reason === "note already resolved" ? "note déjà réglée" : "refusé par le programme local" };
+        return { ok: false, error: t(reply.type === "rejected" && reply.reason === "note already resolved" ? "worker.alreadyResolved" : "worker.refused") };
       }
       threads.set(reply.thread.annotation.id, reply.thread);
       broadcast({ type: "note", note: hostView(reply.thread) }, reply.thread.annotation.page.url);
       return { ok: true, type: "edited", note: hostView(reply.thread) };
     }
     case "clear": {
-      if (!sender.url) return { ok: false, error: "page inconnue" };
+      if (!sender.url) return { ok: false, error: t("worker.unknownPage") };
       const result = await clearOnPage(pageKeyOf(sender.url), request.ids, request.includeOpen);
       return { ok: true, type: "cleared", ...result };
     }
     case "resolve": {
-      const reply = request.reply.trim().slice(0, 4000) || "Réglée à la main.";
+      // Écrite dans la langue choisie au moment où la note est réglée.
+      const reply = request.reply.trim().slice(0, 4000) || t("worker.resolvedByHand");
       const resolution: Resolution = {
         schemaVersion: 1,
         annotationId: request.id,
@@ -294,7 +302,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         return { ok: true, type: "state", note: await queuedView(request.id) };
       }
       const answer = await host.request({ type: "resolve", id: request.id, reply });
-      if (answer.type !== "resolved") return { ok: false, error: "note introuvable" };
+      if (answer.type !== "resolved") return { ok: false, error: t("worker.noteNotFound") };
       threads.set(answer.thread.annotation.id, answer.thread);
       broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
       return { ok: true, type: "state", note: hostView(answer.thread) };
@@ -304,25 +312,25 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         return { ok: true, type: "state", note: await queuedView(request.id) };
       }
       const known = threads.get(request.id);
-      if (!known?.resolution) return { ok: false, error: "note déjà ouverte" };
+      if (!known?.resolution) return { ok: false, error: t("worker.alreadyOpen") };
       const answer = await host.request({ type: "reopen", id: request.id, resolvedAt: known.resolution.resolvedAt });
       if (answer.type !== "reopened") {
-        return { ok: false, error: answer.type === "rejected" && answer.reason === "resolution changed" ? "Claude vient de répondre : relis la note" : "note introuvable" };
+        return { ok: false, error: t(answer.type === "rejected" && answer.reason === "resolution changed" ? "worker.claudeReplied" : "worker.noteNotFound") };
       }
       threads.set(answer.thread.annotation.id, answer.thread);
       broadcast({ type: "note", note: hostView(answer.thread) }, answer.thread.annotation.page.url);
       return { ok: true, type: "state", note: hostView(answer.thread) };
     }
     case "send": {
-      if (!__MARKSPOT_NATIVE__) return { ok: false, error: "la version d'essai n'a pas de programme local" };
-      if (!sender.url) return { ok: false, error: "page inconnue" };
+      if (!__MARKSPOT_NATIVE__) return { ok: false, error: t("worker.trialNoHost") };
+      if (!sender.url) return { ok: false, error: t("worker.unknownPage") };
       const page = pageKeyOf(sender.url);
       await flushOutbox(); // les notes encore en file partent d'abord au programme local
       const ids = request.ids.filter((id) => {
         const thread = threads.get(id);
         return thread && !thread.resolution && pageKeyOf(thread.annotation.page.url) === page;
       });
-      if (ids.length === 0) return { ok: false, error: "aucune note ouverte reçue par le programme local" };
+      if (ids.length === 0) return { ok: false, error: t("worker.noOpenNote") };
       const to = await chosenTarget(sender.url);
       const reply = await host.request({
         type: "send",
@@ -332,12 +340,12 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       });
       if (reply.type === "choose") return { ok: true, type: "choose", listeners: reply.listeners };
       if (reply.type === "rejected" && reply.reason === "nobody listens") {
-        return { ok: false, error: "aucune session n'écoute : dis « écoute mes annotations » dans la session du projet, puis renvoie" };
+        return { ok: false, error: t("worker.nobodyListens") };
       }
       if (reply.type === "rejected" && reply.reason === "no dispatch key") {
-        return { ok: false, error: "le programme local n'a pas de clé d'envoi : relance markspot install sur ce poste" };
+        return { ok: false, error: t("worker.noDispatchKey") };
       }
-      if (reply.type !== "sent") return { ok: false, error: "refusé par le programme local (mets-le à jour ?)" };
+      if (reply.type !== "sent") return { ok: false, error: t("worker.refusedUpdate") };
       await saveTarget(sender.url, { name: reply.to, ...(reply.host ? { host: reply.host } : {}) });
       return { ok: true, type: "sent", count: ids.length, to: reply.to, ...(reply.host ? { host: reply.host } : {}), listening: reply.listening };
     }
@@ -348,7 +356,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
       return { ok: true, type: "targets", listeners, chosen: await chosenTarget(sender.url) };
     }
     case "setTarget":
-      if (!sender.url) return { ok: false, error: "page inconnue" };
+      if (!sender.url) return { ok: false, error: t("worker.unknownPage") };
       await saveTarget(sender.url, request.target);
       return { ok: true, type: "done" };
     case "openExport":
@@ -373,6 +381,7 @@ async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSen
         connected: host.connected,
         // Message de Chrome quand aucun programme local n'est déclaré : pas un simple réveil lent.
         missing: __MARKSPOT_NATIVE__ && /native messaging host not found/i.test(host.lastError ?? ""),
+        lang: currentLang(),
       };
   }
 }
@@ -385,10 +394,61 @@ chrome.runtime.onMessage.addListener((request: OverlayRequest, sender, sendRespo
 // --------------------------------------------------------- icon menu
 
 const EXPORT_MENU = "markspot-export";
+const LANG_MENU = "markspot-lang";
+const LANG_ITEMS: ReadonlyArray<{ id: string; choice: LangChoice; title: Key }> = [
+  { id: "markspot-lang-auto", choice: "auto", title: "worker.langAuto" },
+  { id: "markspot-lang-en", choice: "en", title: "worker.langEn" },
+  { id: "markspot-lang-fr", choice: "fr", title: "worker.langFr" },
+];
 
-chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({ id: EXPORT_MENU, title: "Exporter les notes", contexts: ["action"] });
+/** Le choix gardé dans le stockage (« auto » : la langue du navigateur). */
+let langChoice: LangChoice = "auto";
+let menus: Promise<void> = Promise.resolve();
+
+/** Refait le menu de l'icône dans la langue courante. En file : deux reconstructions ne se croisent pas. */
+function buildMenus(): Promise<void> {
+  const create = (props: chrome.contextMenus.CreateProperties) =>
+    new Promise<void>((resolve) => {
+      chrome.contextMenus.create(props, () => {
+        void chrome.runtime.lastError; // déjà là : rien à faire
+        resolve();
+      });
+    });
+  menus = menus
+    .then(async () => {
+      await chrome.contextMenus.removeAll();
+      await create({ id: EXPORT_MENU, title: t("worker.exportMenu"), contexts: ["action"] });
+      await create({ id: LANG_MENU, title: t("worker.langMenu"), contexts: ["action"] });
+      for (const item of LANG_ITEMS) {
+        await create({ id: item.id, parentId: LANG_MENU, type: "radio", title: t(item.title), checked: item.choice === langChoice, contexts: ["action"] });
+      }
+    })
+    .catch(() => undefined);
+  return menus;
+}
+
+/** Applique un choix de langue : textes du worker, menu et titre de l'icône, overlays ouverts. */
+async function applyLangChoice(choice: LangChoice): Promise<void> {
+  const lang = langOf(choice);
+  const changed = lang !== currentLang();
+  langChoice = choice;
+  setLang(lang);
+  if (changed) broadcastAll({ type: "lang", lang });
+  await chrome.action.setTitle({ title: t("worker.actionTitle") }).catch(() => undefined);
+  await buildMenus();
+}
+
+/** La langue est lue au démarrage du worker : answer() l'attend avant de produire un texte. */
+const ready: Promise<void> = readLangChoice()
+  .then(applyLangChoice)
+  .catch(() => undefined);
+
+// Changé ailleurs (un autre worker, un essai par CDP) : on suit le stockage.
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes[LANG_KEY];
+  if (area !== "local" || !change) return;
+  const choice = parseLangChoice(change.newValue);
+  if (choice !== langChoice) void ready.then(() => applyLangChoice(choice));
 });
 
 async function openExportPage(nextTo?: chrome.tabs.Tab): Promise<void> {
@@ -400,6 +460,12 @@ async function openExportPage(nextTo?: chrome.tabs.Tab): Promise<void> {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === EXPORT_MENU) await openExportPage(tab);
+  const item = LANG_ITEMS.find((i) => i.id === info.menuItemId);
+  if (!item) return;
+  await ready;
+  // Appliqué avant d'écrire : onChanged voit alors le même choix et ne refait rien.
+  if (item.choice !== langChoice) await applyLangChoice(item.choice);
+  await chrome.storage.local.set({ [LANG_KEY]: item.choice });
 });
 
 // ---------------------------------------------------- doctor and tests

@@ -1,6 +1,7 @@
 // Messages entre l'overlay (dans la page) et le service worker.
 
 import type { Stroke } from "../../src/core/drawing.ts";
+import type { Lang } from "../../src/core/i18n.ts";
 import type { PublicListener, SendTarget } from "../../src/core/protocol.ts";
 import type { Annotation, AnnotationId, Mark, Resolution, Viewport, ViewportRect } from "../../src/core/model.ts";
 
@@ -57,8 +58,11 @@ export type OverlayReply =
   | { ok: true; type: "targets"; listeners: PublicListener[]; chosen: SendTarget | null }
   | { ok: true; type: "notes"; notes: NoteView[] }
   | { ok: true; type: "thumbnail"; png: string | null }
-  /** missing : le navigateur ne trouve pas le programme local (pas installé sur ce poste). */
-  | { ok: true; type: "status"; native: boolean; connected: boolean; missing: boolean }
+  /**
+   * missing : le navigateur ne trouve pas le programme local (pas installé sur ce poste).
+   * lang : la langue de l'interface, choisie dans le menu de l'icône.
+   */
+  | { ok: true; type: "status"; native: boolean; connected: boolean; missing: boolean; lang: Lang }
   | { ok: true; type: "done" }
   | { ok: false; error: string };
 
@@ -67,7 +71,9 @@ export type OverlayPush =
   | { type: "note"; note: NoteView }
   | { type: "removed"; id: AnnotationId }
   /** Un message pour la personne, montré dans le menu des notes. */
-  | { type: "notice"; text: string };
+  | { type: "notice"; text: string }
+  /** La langue de l'interface a changé : envoyé à tous les overlays, sur toutes les pages. */
+  | { type: "lang"; lang: Lang };
 
 export const OVERLAY_PORT = "markspot-overlay";
 
