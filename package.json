@@ -25,6 +25,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/",
     "smoke": "node tests/smoke-mcp.ts && node tests/smoke-listen.ts",
+    "e2e:real": "npm run build && node tests/e2e/real-session.e2e.ts",
     "e2e": "node tests/e2e/annotate.e2e.ts"
   },
   "devDependencies": {

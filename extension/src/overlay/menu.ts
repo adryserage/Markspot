@@ -37,6 +37,15 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 }
 
+/** Le commentaire dans la liste : 90 caractères au plus, coupé entre deux mots, avec « … ». Entier au survol. */
+function menuComment(comment: string): HTMLSpanElement {
+  const flat = comment.replace(/\s+/g, " ").trim();
+  const cut = flat.length <= 90 ? flat : `${flat.slice(0, 90).replace(/\s+\S*$/, "")}…`;
+  const span = el("span", "menu-comment", cut);
+  span.title = flat;
+  return span;
+}
+
 export class NotesMenu {
   readonly element = el("div", "menu");
   readonly #toggle = el("button", "menu-toggle");
@@ -389,7 +398,7 @@ export class NotesMenu {
     go.setAttribute("aria-label", `Aller à la note ${note.annotation.seq}`);
     go.append(
       el("span", `menu-seq ${state}`, String(note.annotation.seq)),
-      el("span", "menu-comment", note.annotation.comment.replace(/\s+/g, " ").slice(0, 90)),
+      menuComment(note.annotation.comment),
     );
     go.addEventListener("click", () => this.actions.goTo(note));
     const side = el("div", "menu-side");
