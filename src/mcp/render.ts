@@ -38,7 +38,7 @@ export function renderSummary(thread: Thread): string {
 export function renderDispatch(dispatchId: string, threads: Thread[]): string {
   const result = { dispatch: dispatchId, annotations: threads.map(summary) };
   return [
-    `Markspot: ${threads.length} note${threads.length > 1 ? "s" : ""} sent with "Envoyer à Claude".`,
+    `Markspot: ${threads.length} note${threads.length > 1 ? "s" : ""} sent with "Send to Claude".`,
     ...threads.map(renderSummary),
     "Read each one with markspot_get_annotation, fix it, then markspot_resolve_annotation.",
     JSON.stringify(result),
