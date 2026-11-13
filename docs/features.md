@@ -86,7 +86,7 @@ Next to the menu, buttons do the same in one click:
 
 The "Send to" picker lists the sessions that are listening, by project name (the session's folder). The choice is kept per site. With a single session, the dispatch leaves without a choice; with several and no choice yet, the page asks you to pick one. A chosen project that no longer listens stays in the list with "(not listening)": the dispatch waits for it up to 24 hours.
 
-"Refresh" reloads the list and says how many sessions are listening. "No session is listening" means just that: see [In Claude Code](#in-claude-code).
+"Refresh" reloads the list and says how many sessions are listening. When the list says "No session is listening", start one as described in [In Claude Code](#in-claude-code).
 
 When the same project listens on two computers (the same folder on Linux and on Windows), the list shows both with the computer name, for example "site (LAPTOP)", and the dispatch only goes to the chosen computer.
 
