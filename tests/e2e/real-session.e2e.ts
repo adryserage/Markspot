@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
@@ -190,6 +190,7 @@ try {
   await page?.close().catch(() => undefined);
   await browser.close().catch(() => undefined);
   server.close();
+  await rm(projectDir, { recursive: true, force: true });
   const left = (await liveListeners(config.dataDir)).filter((l) => l.name === PROJECT);
   if (left.length > 0) console.error(`warning: ${left.length} heartbeat(s) of the test session left (they expire in 30 s)`);
 }
