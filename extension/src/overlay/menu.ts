@@ -11,6 +11,8 @@ export interface MenuActions {
   edit(note: NoteView, comment: string): Promise<string | null>;
   clearResolved(notes: NoteView[]): Promise<string | null>;
   clearAll(notes: NoteView[]): Promise<string | null>;
+  /** Supprime cette note seule, ouverte ou réglée. */
+  clearOne(note: NoteView): Promise<string | null>;
   /** Marque la note réglée (true) ou la rouvre (false). */
   setResolved(note: NoteView, resolved: boolean): Promise<string | null>;
   /** Règle ces notes ; rend celles qui ont été réglées et un message s'il en manque. */
@@ -24,6 +26,49 @@ export interface MenuActions {
 }
 
 const UNDO_MS = 8000;
+
+/**
+ * Le formulaire qui modifie un commentaire, dans le menu comme dans la fiche d'une note.
+ * save rend un message d'erreur, ou null : done est alors appelé.
+ */
+export function commentForm(
+  note: NoteView,
+  handlers: { save(comment: string): Promise<string | null>; done(): void; cancel(): void },
+): HTMLFormElement {
+  const form = el("form", "menu-edit");
+  const field = el("textarea", "comment");
+  field.value = note.annotation.comment;
+  field.rows = 3;
+  field.maxLength = 4000;
+  field.setAttribute("aria-label", `Commentaire de la note ${note.annotation.seq}`);
+  const message = el("p", "hint");
+  const actions = el("div", "actions");
+  const cancel = el("button", "ghost", "Annuler");
+  cancel.type = "button";
+  const save = el("button", "primary", "Enregistrer");
+  save.type = "submit";
+  actions.append(cancel, save);
+  form.append(field, message, actions);
+  queueMicrotask(() => field.focus());
+  cancel.addEventListener("click", (e) => {
+    if (e.isTrusted) handlers.cancel();
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const comment = field.value.trim();
+    if (!comment) return field.focus();
+    save.disabled = true;
+    const error = await handlers.save(comment);
+    save.disabled = false;
+    if (error) {
+      message.textContent = `Non enregistré : ${error}`;
+      message.classList.add("error");
+      return;
+    }
+    handlers.done();
+  });
+  return form;
+}
 
 export type NoteState = "pending" | "open" | "resolved";
 export const STATE_LABEL: Record<NoteState, string> = { pending: "En attente", open: "Ouverte", resolved: "Réglée" };
@@ -423,40 +468,52 @@ export class NotesMenu {
       edit.addEventListener("click", () => this.#startEdit(item, note));
       side.append(edit);
     }
+    const remove = el("button", "ghost small danger-text", "Supprimer");
+    remove.type = "button";
+    remove.addEventListener("click", (e) => {
+      if (e.isTrusted) this.#confirmDelete(item, note);
+    });
+    side.append(remove);
     item.append(go, side);
     return item;
   }
 
   #startEdit(item: HTMLLIElement, note: NoteView): void {
     this.#editing = true;
-    const form = el("form", "menu-edit");
-    const field = el("textarea", "comment");
-    field.value = note.annotation.comment;
-    field.rows = 3;
-    field.maxLength = 4000;
-    field.setAttribute("aria-label", `Commentaire de la note ${note.annotation.seq}`);
-    const message = el("p", "hint");
-    const actions = el("div", "actions");
-    const cancel = el("button", "ghost", "Annuler");
-    cancel.type = "button";
-    const save = el("button", "primary", "Enregistrer");
-    save.type = "submit";
-    actions.append(cancel, save);
-    form.append(field, message, actions);
-    item.replaceChildren(form);
-    field.focus();
+    item.replaceChildren(
+      commentForm(note, {
+        save: (comment) => this.actions.edit(note, comment),
+        done: () => this.cancelEdit(),
+        cancel: () => this.cancelEdit(),
+      }),
+    );
+  }
 
-    cancel.addEventListener("click", () => this.cancelEdit());
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const comment = field.value.trim();
-      if (!comment) return field.focus();
-      save.disabled = true;
-      const error = await this.actions.edit(note, comment);
-      save.disabled = false;
+  /** « Supprimer » : la ligne devient une question, Oui retire la note, Non (ou Échap) annule. */
+  #confirmDelete(item: HTMLLIElement, note: NoteView): void {
+    this.#editing = true;
+    const box = el("div", "menu-delete");
+    const text = el("p", "", `Supprimer la note ${note.annotation.seq} ?`);
+    const yes = el("button", "danger", "Oui, supprimer");
+    const no = el("button", "ghost", "Non");
+    yes.type = "button";
+    no.type = "button";
+    const answers = el("div", "actions");
+    answers.append(yes, no);
+    box.append(text, answers);
+    item.replaceChildren(box);
+    no.focus();
+    no.addEventListener("click", (e) => {
+      if (e.isTrusted) this.cancelEdit();
+    });
+    yes.addEventListener("click", async (e) => {
+      if (!e.isTrusted) return;
+      yes.disabled = true;
+      const error = await this.actions.clearOne(note);
+      yes.disabled = false;
       if (error) {
-        message.textContent = `Non enregistré : ${error}`;
-        message.classList.add("error");
+        text.textContent = `Non supprimée : ${error}`;
+        text.classList.add("error");
         return;
       }
       this.cancelEdit();
