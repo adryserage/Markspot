@@ -33,10 +33,10 @@ const USAGE = `markspot ${VERSION}
   markspot doctor
   markspot uninstall
   markspot mcp                 MCP server on stdio, started by Claude Code
-  markspot claude [args…]      start Claude Code with the Markspot channel: "Envoyer à Claude"
+  markspot claude [args…]      start Claude Code with the Markspot channel: "Send to Claude"
                                wakes the session up (research preview, asks for confirmation)
   markspot listen [--name <projet>] [--url <prefix>] [--timeout <s>]
-                               wait for notes sent with "Envoyer à Claude" (exit 0), or time out (exit 2)
+                               wait for notes sent with "Send to Claude" (exit 0), or time out (exit 2)
   markspot host <origin>       started by the browser, not by hand
 `;
 
