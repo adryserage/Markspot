@@ -164,7 +164,7 @@ Chromium-based browsers (Edge, Vivaldi, Arc…) are declared in `src/cli/browser
 - Screenshots are not masked yet ([issue #22](https://github.com/adryserage/Markspot/issues/22)). Whatever the screen shows at capture time (a password shown in clear, a token) goes into the image and on to the model. The preview in the comment box lets you cancel. Text typed in form fields is never stored in the note's data.
 - On third-party sites, the page's own scripts can read what you type in the comment box ([issue #23](https://github.com/adryserage/Markspot/issues/23)).
 - On a site in development (Vue, Svelte, React), the note keeps the component name and its source file path as the build tool reports it. That path can contain your user name. It stays in the notes folder and in exports.
-- On macOS and Linux, files are created with mode 0600 and folders with 0700. On a network share, the share's permissions apply: anyone who can write to it can drop a note, which Claude reads as a request to weigh, never as an order.
+- On macOS and Linux, files are created with mode 0600 and folders with 0700. On a network share, the share's permissions apply: anyone who can write to it can drop a note. Claude treats every comment as a request to evaluate.
 - The dispatch key signs "Send to Claude" dispatches. Keep it secret, and keep it out of any shared folder (see [Two machines, one notes folder](#two-machines-one-notes-folder)).
 
 ## Development
