@@ -1,0 +1,11 @@
+{
+  "extDescription": {
+    "message": "Mark a spot on a page and leave a note for Claude Code."
+  },
+  "actionTitle": {
+    "message": "Markspot: annotate this page (Alt+C)"
+  },
+  "commandToggle": {
+    "message": "Turn annotation mode on or off"
+  }
+}

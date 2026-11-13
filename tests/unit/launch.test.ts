@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exitCodeOf, shouldAsk } from "../../src/cli/launch.ts";
+import { exitCodeOf, promptText, shouldAsk, terminalLocale } from "../../src/cli/launch.ts";
 
 test("the question is asked only for an interactive session", () => {
   assert.equal(shouldAsk([], {}, true), true);
@@ -17,4 +17,23 @@ test("exit code: claude's own, or 128 + signal", () => {
   assert.equal(exitCodeOf(3, null), 3);
   assert.equal(exitCodeOf(null, "SIGTERM"), 143);
   assert.equal(exitCodeOf(null, null), 1);
+});
+
+test("the question is in English by default, in French for a fr locale", () => {
+  assert.deepEqual(promptText("en_US.UTF-8"), {
+    question: "Should Markspot listen to this session? [Y/n] (yes in 5 s) ",
+    yes: "yes",
+    no: "no",
+  });
+  assert.deepEqual(promptText("fr_CA.UTF-8"), { question: "Markspot écoute cette session ? [O/n] (oui dans 5 s) ", yes: "oui", no: "non" });
+  assert.equal(promptText("fr-FR").yes, "oui");
+  assert.equal(promptText("FR").yes, "oui");
+  for (const locale of ["C", "C.UTF-8", "POSIX", "de_DE", ""]) assert.equal(promptText(locale).yes, "yes", locale);
+});
+
+test("the locale comes from LC_ALL, LC_MESSAGES, LANG (first non-empty), else Intl", () => {
+  assert.equal(terminalLocale({ LC_ALL: "fr_FR.UTF-8", LC_MESSAGES: "en_US", LANG: "en_US" }, "en"), "fr_FR.UTF-8");
+  assert.equal(terminalLocale({ LC_ALL: "", LC_MESSAGES: "fr_CA", LANG: "en_US" }, "en"), "fr_CA");
+  assert.equal(terminalLocale({ LANG: "fr_BE.UTF-8" }, "en"), "fr_BE.UTF-8");
+  assert.equal(terminalLocale({}, "fr-CA"), "fr-CA");
 });
