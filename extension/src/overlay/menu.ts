@@ -40,7 +40,9 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 /** Le commentaire dans la liste : 90 caractères au plus, coupé entre deux mots, avec « … ». Entier au survol. */
 function menuComment(comment: string): HTMLSpanElement {
   const flat = comment.replace(/\s+/g, " ").trim();
-  const cut = flat.length <= 90 ? flat : `${flat.slice(0, 90).replace(/\s+\S*$/, "")}…`;
+  // Un caractère de plus : si le 91e est une espace, le 90e mot est entier et reste.
+  const words = flat.slice(0, 91).replace(/\s+\S*$/, "");
+  const cut = flat.length <= 90 ? flat : `${(words || flat.slice(0, 90)).trimEnd()}…`;
   const span = el("span", "menu-comment", cut);
   span.title = flat;
   return span;
