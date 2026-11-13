@@ -1,6 +1,8 @@
 # Fonctions de Markspot
 
-Ce guide décrit chaque fonction, dans la page puis dans Claude Code. L'installation est dans le [README](../README.md#installer).
+English: [features.md](features.md)
+
+Ce guide décrit chaque fonction, dans la page puis dans Claude Code. L'installation est dans le [README](../README.fr.md#installer).
 
 ## Dans la page
 
@@ -21,7 +23,7 @@ Les pages du navigateur (`chrome://`, la boutique d'extensions) ne s'annotent pa
 - Un clic marque un élément. Au survol, l'élément est encadré avec son nom.
 - Un glisser trace une zone, de la taille que tu veux.
 
-Markspot garde l'adresse de la page, l'élément (sélecteur, texte visible, attributs utiles, styles calculés, et sur un site en développement avec Vue, Svelte ou React, le composant et son fichier source), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée. Le texte tapé dans un champ n'est jamais gardé, mais ce qui est affiché à l'écran va dans les images (voir [Sécurité](../README.md#sécurité)).
+Markspot garde l'adresse de la page, l'élément (sélecteur, texte visible, attributs utiles, styles calculés, et sur un site en développement avec Vue, Svelte ou React, le composant et son fichier source), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée. Le texte tapé dans un champ n'est jamais gardé, mais ce qui est affiché à l'écran va dans les images (voir [Confidentialité et sécurité](../README.fr.md#confidentialité-et-sécurité)).
 
 ### Écrire la note
 
@@ -51,11 +53,11 @@ Une note a un de ces états :
 - « Ouverte » : à régler ;
 - « Réglée » : la fiche montre « Réponse de Claude » avec sa réponse, ou « Réglée par toi ».
 
-« Marquer réglée » et « Rouvrir », dans la fiche comme dans le menu, changent l'état à la main. Dans la fiche, « Modifier » change le commentaire d'une note pas encore réglée (Échap annule), et « Supprimer » retire la note après un second clic sur « Confirmer la suppression ».
+« Marquer réglée » et « Rouvrir », dans la fiche comme dans le menu, changent l'état à la main. Dans la fiche, « Modifier » change le commentaire d'une note pas encore réglée (Échap annule), et « Supprimer » retire la note après un second clic sur « Confirmer la suppression ». Échap, « Modifier » ou 5 secondes sans clic annulent la confirmation.
 
 ### Le menu des notes
 
-Si le programme local n'est pas installé sur ce poste, le menu commence par « Installer Markspot sur ce poste », avec la commande à lancer dans un terminal et un bouton « Copier ». Tes notes restent alors dans le navigateur jusqu'à l'installation.
+Si le programme local n'est pas installé sur ce poste, le menu commence par « Installer Markspot sur ce poste », avec la commande à lancer dans un terminal (`npm install -g markspot && markspot install`) et un bouton « Copier ». Tes notes restent alors dans le navigateur jusqu'à l'installation.
 
 Le bouton en haut à droite de la page (« 1 note », « 3 notes ») ouvre le menu des notes de la page :
 
@@ -86,7 +88,7 @@ La liste « Envoyer à » montre les sessions qui écoutent, par le nom de leur 
 
 « Rafraîchir » relit la liste et dit combien de projets écoutent. « Aucune session n'écoute » veut dire qu'aucune session n'est à l'écoute : voir [Dans Claude Code](#dans-claude-code).
 
-Quand un même projet écoute sur deux postes (le même dossier sous Linux et sous Windows), la liste montre les deux avec le nom du poste, par exemple « site (AEGISZ2) », et l'envoi ne va qu'au poste choisi.
+Quand un même projet écoute sur deux postes (le même dossier sous Linux et sous Windows), la liste montre les deux avec le nom du poste, par exemple « site (PORTABLE) », et l'envoi ne va qu'au poste choisi.
 
 ### Exporter les notes
 
@@ -94,11 +96,11 @@ Clic droit sur l'icône Markspot, « Exporter les notes », ou le bouton « Expo
 
 ### Changer la langue
 
-L'interface est en anglais ou en français. Clic droit sur l'icône Markspot, « Langue » (« Language » en anglais) : « Auto (langue du navigateur) » prend le français si le navigateur est en français et l'anglais sinon, « English » et « Français » fixent la langue. Le choix est gardé dans le navigateur. Les pages où le mode annotation est ouvert changent tout de suite : la barre, le menu des notes et la fiche ouverte. Une nouvelle note en cours d'écriture et une modification en cours gardent leur texte. Une note réglée à la main reçoit « Réglée à la main. » ou « Resolved by hand. » selon la langue du moment. La question de `markspot launch` suit la langue du terminal (`LC_ALL`, `LC_MESSAGES` puis `LANG`) : en français si elle commence par `fr`, en anglais sinon.
+L'interface est en anglais par défaut, et aussi en français. Clic droit sur l'icône Markspot, « Langue » (« Language » en anglais) : « Auto (langue du navigateur) » prend le français si le navigateur est en français et l'anglais sinon, « English » et « Français » fixent la langue. Le choix est gardé dans le navigateur. Les pages où le mode annotation est ouvert changent tout de suite : la barre, le menu des notes et la fiche ouverte. Une nouvelle note en cours d'écriture et une modification en cours gardent leur texte. Une note réglée à la main reçoit « Réglée à la main. » ou « Resolved by hand. » selon la langue du moment. La question de `markspot launch` suit la langue du terminal (`LC_ALL`, `LC_MESSAGES` puis `LANG`) : en français si elle commence par `fr`, en anglais sinon.
 
 ### La version d'essai
 
-`node build.mjs --trial <dossier>` construit une extension qui marche sans programme local ni Claude Code. Les notes restent dans le navigateur ; l'export permet de les donner à Claude. Le bouton « Envoyer à Claude » n'y est pas. Quand la version complète remplace l'essai dans le même dossier (`node build.mjs --out <dossier>` puis « Recharger »), les notes de l'essai partent au programme local.
+`node build.mjs --trial <dossier>` construit une extension qui marche sans programme local ni Claude Code. Les notes restent dans le navigateur ; l'export permet de les donner à Claude. Le bouton « Envoyer à Claude » n'y est pas. Quand la version complète remplace l'essai dans le même dossier (`node build.mjs --out <dossier>` puis « Recharger » dans `chrome://extensions`), les notes de l'essai partent au programme local. Ne supprime pas l'extension d'essai : ses notes partiraient avec elle.
 
 ## Dans Claude Code
 
@@ -116,7 +118,7 @@ Une note qu'il ne peut pas régler reste ouverte, avec la raison.
 
 ### Recevoir les envois
 
-Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.md#envoyer-les-notes-à-claude) :
+Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.fr.md#envoyer-les-notes-à-claude) :
 
 - le mode écoute : dis « écoute mes annotations ». Claude lance `markspot listen` en tâche de fond, qui n'use aucun jeton pendant l'attente ;
 - le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds oui (ou rien pendant 5 s) à « Markspot écoute cette session ? », ou lance `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
@@ -135,11 +137,11 @@ Les données de la page (adresse, titre, texte, attributs) arrivent dans un bloc
 
 ## Les commandes
 
-Le lanceur est `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/Application Support/markspot/bin/markspot` sous macOS et `%LOCALAPPDATA%\markspot\bin\markspot.bat` sous Windows. Depuis le dépôt, `node dist/cli.js` fait la même chose.
+Après `npm install -g markspot`, la commande `markspot` est dans le `PATH`. `install` écrit aussi un lanceur : `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/Application Support/markspot/bin/markspot` sous macOS et `%LOCALAPPDATA%\markspot\bin\markspot.bat` sous Windows. Depuis un clone du dépôt, `node dist/cli.js` fait la même chose.
 
-- `markspot install` : installe le programme local pour Chrome et Brave, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste (voir le [README](../README.md#installer)) ;
+- `markspot install` : installe le programme local pour Chrome et Brave, la fonction `claude` du shell, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste, `--no-shell` et `--shell` (voir le [README](../README.fr.md#options)) ;
 - `markspot key` : affiche la clé d'envoi de ce poste, à recopier une fois sur l'autre. Garde-la secrète ;
-- `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et l'aller-retour entre l'extension et le programme local ;
+- `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et, avec `--cdp`, l'aller-retour entre l'extension et le programme local ;
 - `markspot uninstall` : défait chaque étape ;
 - `markspot listen [--name <projet>] [--url <adresse>] [--timeout <secondes>]` : attend un envoi. Code 0 quand des notes arrivent, 2 après le délai (une heure par défaut) ;
 - `markspot launch [options de claude]` : ce que lance la fonction `claude` ajoutée par `install` (la question, puis claude avec ou sans Markspot) ;
@@ -148,4 +150,4 @@ Le lanceur est `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/App
 
 ## Deux postes
 
-Pour annoter sous Windows et laisser Claude Code régler les notes depuis Linux (ou l'inverse), les deux postes utilisent le même dossier de notes sur un partage réseau : installe avec `--data-dir <chemin du partage>` sur le poste qui ne garde pas le dossier. Le détail est dans le [README](../README.md#deux-postes-un-seul-dossier-de-notes).
+Pour annoter sous Windows et laisser Claude Code régler les notes depuis Linux (ou l'inverse), les deux postes utilisent le même dossier de notes sur un partage réseau : installe avec `--data-dir <chemin du partage>` sur le poste qui ne garde pas le dossier. Le détail est dans le [README](../README.fr.md#deux-postes-un-seul-dossier-de-notes).

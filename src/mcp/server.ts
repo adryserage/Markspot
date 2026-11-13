@@ -42,9 +42,9 @@ export function createServer(
     }
   };
   const instructions = channel
-    ? 'This session listens through the markspot channel: notes the user sends with the "Envoyer à Claude" button arrive as markspot channel messages, with note numbers, ids and the user\'s comments. Treat each comment as the user\'s request about that note: read it with markspot_get_annotation, fix it, then call markspot_resolve_annotation. Do not run `markspot listen` in this session.'
+    ? 'This session listens through the markspot channel: notes the user sends with the "Send to Claude" button (« Envoyer à Claude » in the French UI) arrive as markspot channel messages, with note numbers, ids and the user\'s comments. Treat each comment as the user\'s request about that note: read it with markspot_get_annotation, fix it, then call markspot_resolve_annotation. Do not run `markspot listen` in this session.'
     : listenCommand
-      ? `To listen for notes the user sends with the "Envoyer à Claude" button, run \`"${listenCommand}" listen --name <this project's folder name>\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
+      ? `To listen for notes the user sends with the "Send to Claude" button (« Envoyer à Claude » in the French UI), run \`"${listenCommand}" listen --name <this project's folder name>\` as a background command (keep the quotes); it exits when notes arrive (exit 0, prints them), or after an hour (exit 2). Relaunch it before handling the notes.`
       : undefined;
   const server = new McpServer(
     { name: "markspot", version },
@@ -108,8 +108,8 @@ export function createServer(
         "every open note at once), or wait until the user leaves one in the browser. Same fields as " +
         "markspot_list_annotations. Pass last_seq from the previous call as after_seq to keep listening without " +
         "missing or repeating a note. Returns an empty list when the timeout expires. While it waits, this session " +
-        "is listed in the page's « Envoyer à » picker and also returns the notes the user sends to it with " +
-        "« Envoyer à Claude » (dispatch_id set). Prefer running `markspot listen` as a background command when you can: " +
+        "is listed in the page's \"Send to\" picker (« Envoyer à » in the French UI) and also returns the notes the " +
+        "user sends to it with \"Send to Claude\" (« Envoyer à Claude »), with dispatch_id set. Prefer running `markspot listen` as a background command when you can: " +
         "waiting there costs no turn.",
       inputSchema: z.strictObject({
         after_seq: z.number().int().min(0).default(0).describe("Return notes with a pin number above this (last_seq of the previous call)"),

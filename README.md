@@ -1,53 +1,37 @@
 # Markspot
 
-Tu marques un endroit d'une page web et tu y laisses une note. Claude Code lit la note, corrige le code, vérifie dans le navigateur et répond sur la page.
+Français : [README.fr.md](README.fr.md)
 
-Tout reste sur ton poste : aucune donnée envoyée ailleurs, aucune télémétrie.
+Markspot lets you mark a spot on a web page and leave a note about it. Claude Code reads the note, fixes the code, checks the result in the browser and answers on the page, next to your note.
 
-## État
+Every feature is described in the [feature guide](docs/features.md).
 
-Version 0.1, en construction. La boucle complète marche : tu annotes dans Chrome ou Brave, Claude Code lit la note avec ses deux images, corrige, puis la résout, et la pastille passe à « Réglée » avec sa réponse. Essayé sous Linux (Chrome) et sous Windows (Brave) ; l'installation sous macOS n'a pas encore été essayée sur une vraie machine.
+## Status
 
-Chaque fonction est décrite dans [docs/fonctions.md](docs/fonctions.md).
+Version 0.1. Markspot works with Chrome and Brave on Linux and Windows. The install on macOS has not been tried on a real machine yet.
 
-## Essayer l'annotation seule
+The whole loop works: you annotate in the browser, Claude Code reads the note with its two screenshots, fixes the code, then resolves the note, and the pin on the page turns to "Resolved" with Claude's reply.
 
-Cette version n’a besoin ni du programme local ni de Claude Code. Elle ne dépend pas du système d’exploitation.
+## Install
+
+You need Node 22.18 or later and Claude Code.
 
 ```sh
-npm install
-node build.mjs --trial ./markspot-essai
+npm install -g markspot
+markspot install
 ```
 
-Dans Chrome, ouvre `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `markspot-essai`. Sur une page, appuie sur Alt+C ou clique sur l'icône Markspot. Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
+`install` cannot load the extension in your browser by itself, so it ends with a "to do" line that names the extension folder. That folder is `extension` inside the installed package, which is `$(npm root -g)/markspot/extension`. Load it once:
 
-Pour donner tes notes à Claude Code sans le programme local : clic droit sur l'icône Markspot, « Exporter les notes ». Tu obtiens un fichier JSON avec chaque note et ses deux images, à enregistrer là où Claude Code peut le lire.
+1. Open `chrome://extensions` (or `brave://extensions`) and turn on developer mode.
+2. Click "Load unpacked" and choose that folder.
+3. Open a new terminal, so that your shell picks up the `claude` function that `install` added.
+4. Open a web page and press Alt+C. The extension connects to the local program.
+5. Run `markspot doctor` to check every step.
 
-Pour mettre l'essai à jour, reconstruis le dossier puis clique « Recharger » dans `chrome://extensions`. Ne supprime pas l'extension : ses notes partiraient avec elle.
+If Alt+C does nothing, set the shortcut in `chrome://extensions/shortcuts`.
 
-## Comment ça marche
-
-1. Dans Chrome, tu appuies sur Alt+C, tu cliques sur un élément ou tu traces une zone, puis tu écris ton commentaire.
-2. Markspot garde l'adresse, l'élément (sélecteur, texte, styles calculés), la taille de l'écran et deux images : le gros plan de la zone et l'écran entier avec la zone encadrée.
-3. La boîte de commentaire s'ouvre sur la capture : tu peux dessiner dessus (flèche, rectangle, stylo) pour montrer précisément ce qui cloche.
-4. Dans Claude Code, tu demandes « règle mes annotations ». Claude lit chaque note avec ses images, trouve le fichier source, corrige et vérifie.
-5. Sur la page, la pastille passe à « Réglée » et affiche la réponse de Claude.
-
-Pendant le mode annotation, le menu en haut à droite liste les notes de la page, et des boutons express à côté règlent, exportent, envoient à Claude ou effacent en un clic. Le détail est dans [docs/fonctions.md](docs/fonctions.md#le-menu-des-notes).
-
-Une note « En attente » n'a pas encore été reçue par le programme local : c'est le cas de toutes les notes tant que Markspot n'est pas installé sur le poste (version d'essai). Elles partent toutes seules à la première connexion.
-
-Trois pièces font le travail :
-
-- une extension Chrome (Manifest V3) ;
-- un programme local, `markspot host`, que Chrome lance lui-même par native messaging. Il est le seul à écrire les annotations. Il n'ouvre aucun port réseau ;
-- un serveur MCP, `markspot mcp`, que chaque session Claude Code lance pour lire et résoudre les annotations.
-
-Les annotations sont des fichiers JSON et PNG dans `~/.local/share/markspot`.
-
-## Installer
-
-Markspot marche sous Windows, macOS et Linux, avec Chrome et Brave. Il faut Node 22.18 ou plus récent et Claude Code.
+### From source
 
 ```sh
 git clone https://github.com/adryserage/Markspot
@@ -57,93 +41,148 @@ npm run build
 node dist/cli.js install
 ```
 
-Ouvre un nouveau terminal pour que la fonction `claude` soit prise. Ensuite, dans Chrome ou Brave : ouvre `chrome://extensions` (ou `brave://extensions`), active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Ouvre une page et appuie sur Alt+C : l'extension se connecte au programme local. `node dist/cli.js doctor` vérifie le tout.
+Then load the `extension/` folder of the repository as above. From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
 
-`install` fait, dans l'ordre :
+### What install does
 
-1. le réglage (`config.json`) ;
-2. le lanceur du programme local, avec le chemin complet de Node ;
-3. la déclaration du programme local pour chaque navigateur installé : un fichier dans le dossier `NativeMessagingHosts` du navigateur sous macOS et Linux, une clé de registre sous Windows (Chrome et Brave la partagent) ;
-4. la clé qui signe les envois « Envoyer à Claude » (voir « Deux postes ») ;
-5. une fonction `claude` dans les fichiers de démarrage de ton shell (`~/.zshrc`, `~/.bashrc`, et le profil PowerShell sous Windows), entre deux lignes `# >>> markspot >>>` et `# <<< markspot <<<` : chaque session Claude Code que tu lances avec `claude` peut écouter Markspot (voir « Envoyer les notes à Claude ») ;
-6. le serveur MCP dans Claude Code (`claude mcp add --scope user markspot`) ;
-7. le skill « règle mes annotations » (lien dans `~/.claude/skills/markspot`).
+`install` runs these steps in order:
 
-On peut le relancer : une étape déjà faite n'est pas refaite. `uninstall` défait chaque étape.
+1. Settings: writes `config.json` with the options you passed.
+2. Dispatch key: creates the key that signs "Send to Claude" dispatches (see [Two machines, one notes folder](#two-machines-one-notes-folder)). It never replaces an existing key.
+3. Host launcher: a small script that starts the local program with the full path of Node, because a browser started from a menu does not always have your shell's `PATH`.
+4. Markspot command: a second launcher, `markspot`, that Claude Code sessions use to run `markspot listen`.
+5. Host manifest for each browser: on Linux and macOS, a file in the browser's `NativeMessagingHosts` folder (a browser that is not installed is skipped); on Windows, a registry key that Chrome and Brave share.
+6. Extension: with `--cdp`, `install` loads the extension in that Chrome itself. Otherwise this step is the "to do" line above, and it counts as done once the extension has connected to the local program.
+7. Shell: a `claude` function in your shell startup files (`~/.zshrc`, `~/.bashrc`, and on Windows the PowerShell profiles), between a `# >>> markspot >>>` line and a `# <<< markspot <<<` line. Each Claude Code session you start with `claude` can then listen to Markspot (see [Automatic wake-up](#automatic-wake-up-research-preview)). Fish and cmd.exe are not supported.
+8. MCP server: `claude mcp add --scope user markspot`.
+9. Skill: a link from `~/.claude/skills/markspot` to the skill in the package.
 
-Options :
+You can run `install` again: a step that is already done is not redone. `markspot uninstall` undoes every step, and `markspot doctor` checks each one, then checks that the notes folder is writable.
 
-- `--browser chrome`, `--browser brave` ou `--browser all` (par défaut) ;
-- `--chrome-profile <dossier>` pour un Chrome lancé avec `--user-data-dir` ;
-- `--cdp http://127.0.0.1:9222` pour un Chrome lancé avec un port de débogage : `install` y charge alors l'extension tout seul.
+### Options
 
-Les notes sont rangées dans `%LOCALAPPDATA%\markspot` sous Windows, `~/Library/Application Support/markspot` sous macOS et `~/.local/share/markspot` sous Linux.
+- `--browser chrome`, `--browser brave`, `--browser chrome,brave` or `--browser all` (the default).
+- `--chrome-profile <folder>` for a Chrome started with `--user-data-dir`.
+- `--cdp http://127.0.0.1:9222` for a Chrome started with a debugging port: `install` loads the extension there, and `doctor` checks the round trip between the extension and the local program.
+- `--data-dir <absolute path>` to keep the notes in another folder, for example a network share.
+- `--key-file <file>` to use the dispatch key of your other machine.
+- `--no-shell` leaves your shell startup files alone. `--shell` adds the `claude` function again after an earlier `--no-shell`.
 
-## Envoyer les notes à Claude
+`install` keeps these options in `config.json`, so the next `install`, `doctor` or `uninstall` reuses them.
 
-Dans la page, le bouton « Envoyer à Claude » envoie les notes ouvertes à une session Claude Code. La liste « Envoyer à » montre les sessions qui écoutent, avec le nom de leur projet (le nom du dossier de la session). Le choix est gardé par site, et « Rafraîchir » relit la liste. Un envoi attend 24 heures que la session choisie écoute.
+## How it works
 
-Une session écoute de deux façons.
+1. In the browser, press Alt+C (or click the Markspot icon), click an element or drag over an area, then write your comment.
+2. Markspot keeps the page address, the element (selector, visible text, useful attributes, computed styles), the screen size and two screenshots: a close-up of the area and the whole screen with the area framed.
+3. The comment box opens on the screenshot. You can draw on it (arrow, rectangle, pen) to show what is wrong.
+4. In Claude Code, say "fix my annotations". Claude reads each note with its screenshots, finds the source file, fixes it and checks the result in the browser.
+5. On the page, the pin turns to "Resolved" and shows Claude's reply.
 
-### Mode écoute (par défaut)
+Three parts do the work:
 
-Dis « écoute mes annotations » à la session. Claude lance `markspot listen --name <projet>` en tâche de fond : l'attente ne coûte rien, et la commande se termine quand des notes arrivent. Claude les règle, puis relance l'écoute. Il faut le redire dans chaque nouvelle session. Si Claude attend avec l'outil `markspot_wait_for_annotations` plutôt qu'avec la commande, la session apparaît aussi dans « Envoyer à » : pendant l'attente et 10 minutes après.
+- a Chrome extension (Manifest V3);
+- a local program, `markspot host`, that the browser starts itself through native messaging. It is the only part that writes notes, and it opens no network port;
+- an MCP server, `markspot mcp`, that each Claude Code session starts to read and resolve notes.
 
-### Réveil automatique (aperçu de recherche)
+Notes are JSON and PNG files in `~/.local/share/markspot` on Linux, `~/Library/Application Support/markspot` on macOS and `%LOCALAPPDATA%\markspot` on Windows.
 
-Après `install`, rien à retenir : quand tu lances `claude` dans un terminal, Markspot demande « Markspot écoute cette session ? [O/n] ». Entrée ou rien pendant 5 secondes : oui. `n` lance Claude sans Markspot. Si une session écoute déjà ce projet (même nom de dossier) sur ce poste, la question ne vient pas et la nouvelle session démarre sans Markspot. `claude -p`, `claude mcp …`, `claude --version` et les scripts ne sont pas touchés. Tes options passent telles quelles, ton mode de permission compris. Pour lancer Claude sans cette fonction : `command claude` (sh, zsh) ; `install --no-shell` ne l'ajoute pas. Fish et cmd.exe ne sont pas pris.
+A note shows "Pending" until the local program has received it, for example when Markspot is not installed on this computer yet. Pending notes leave on their own at the next connection.
 
-Tu peux aussi lancer Claude Code avec `markspot claude` au lieu de `claude` (sous Windows : `%LOCALAPPDATA%\markspot\bin\markspot.bat claude` ; sous Linux : `~/.local/share/markspot/bin/markspot claude`). Les options suivantes passent à `claude`. Comme la session se réveille sans toi, `markspot claude` la lance avec `--permission-mode default` (Claude demande avant chaque commande), sauf si tu choisis toi-même un mode (`--permission-mode` ou `--dangerously-skip-permissions`). La session apparaît alors d'elle-même dans « Envoyer à », même inactive, et se réveille quand tu envoies des notes, sans `markspot listen`.
+## Sending notes to Claude
 
-Cette commande utilise les canaux de Claude Code, encore en aperçu de recherche. Pour un serveur qui n'est pas un plugin approuvé par Anthropic, Claude Code ne les ouvre qu'avec le drapeau `--dangerously-load-development-channels server:markspot`, que `markspot claude` ajoute pour toi :
+On the page, the "Send to Claude" button sends the open notes to a Claude Code session. The "Send to" picker lists the sessions that are listening, by project name (the name of the session's folder). The choice is kept per site, and "Refresh" reloads the list. A dispatch waits up to 24 hours for the chosen session to listen.
 
-- au lancement, Claude Code affiche un avertissement et demande de confirmer « I am using this for local development » ;
-- le drapeau est prévu pour le développement : sa forme peut changer d'une version de Claude Code à l'autre ;
-- la voie normale, `--channels`, n'accepte que les plugins approuvés par Anthropic. Markspot ne l'est pas, donc le mode écoute reste le mode par défaut ;
-- il faut une session interactive (pas `claude -p`) et une connexion claude.ai ou une clé de la Console ; dans une organisation Team ou Enterprise, un administrateur doit activer les canaux.
+A session listens in one of two ways.
 
-Le message poussé dans la session contient seulement le numéro, l'identifiant et le commentaire de chaque note. Claude lit la page et les images avec `markspot_get_annotation`, comme dans le mode écoute.
+### Listen mode (default)
 
-Claude Code ne confirme pas la réception : l'envoi reste donc en attente jusqu'à ce que Claude ouvre une des notes. Si rien ne se passe pendant 2 minutes (avertissement refusé, canaux désactivés par l'administrateur), l'envoi revient dans la file et la session disparaît de « Envoyer à » jusqu'à son prochain appel d'outil. Dis alors « écoute mes annotations » à la session : `markspot listen` prendra l'envoi.
+Tell the session "listen to my annotations". Claude runs `markspot listen --name <project>` as a background command. Waiting costs nothing, and the command exits when notes arrive. Claude fixes them, then starts listening again. You need to say it again in each new session.
 
-## Deux postes, un seul dossier de notes
+If Claude waits with the `markspot_wait_for_annotations` tool instead of the command, the session also shows in "Send to", while it waits and for 10 minutes after.
 
-Pour annoter sur un poste et laisser Claude Code régler les notes depuis un autre, les deux lisent le même dossier de notes, partagé sur le réseau. Partage seulement ce dossier (par exemple un partage Samba `markspot-notes` dont le chemin est `~/.local/share/markspot`). Sur le poste qui ne garde pas le dossier, installe avec `--data-dir` et un chemin absolu vers le partage, par exemple sous Windows :
+### Automatic wake-up (research preview)
 
-```sh
-node dist/cli.js install --browser all --data-dir \\serveur\markspot-notes
+After `install`, there is nothing to remember. When you start `claude` in a terminal, Markspot asks:
+
+```text
+Should Markspot listen to this session? [Y/n] (yes in 5 s)
 ```
 
-Le lanceur et la déclaration du programme local restent sur le poste ; seules les notes passent par le partage.
+Enter, any other key or no answer for 5 seconds means yes. `n` starts Claude without Markspot, and Ctrl+C starts nothing. The question is in French when your terminal locale starts with `fr`.
 
-Les deux postes signent leurs envois « Envoyer à Claude » avec la même clé : une session n'accepte que les envois signés et datés de moins de 25 heures, et jamais deux fois le même, pour qu'un fichier déposé ou recopié sur le partage ne puisse pas la réveiller. `install` crée la clé sur le premier poste. Sur le second, recopie-la une fois :
+- The question is skipped when a session already listens to this project (same folder name) on this computer. The new session then starts without Markspot.
+- `claude -p`, `claude mcp …`, `claude --version` and scripts are left alone.
+- Your options reach `claude` unchanged, your permission mode included.
+- To start Claude without this function, run `command claude` (sh, zsh), or install with `--no-shell`.
 
-1. sur le premier poste, `markspot key` affiche la clé ; enregistre-la dans un fichier (par exemple sur une clé USB) ;
-2. sur le second, `markspot install --key-file <ce fichier>`, puis supprime le fichier.
+You can also start Claude Code with `markspot claude` instead of `claude`. The options that follow go to `claude`. Because the session wakes up without you, `markspot claude` starts it with `--permission-mode default` (Claude asks before each command), unless you choose a mode yourself with `--permission-mode` or `--dangerously-skip-permissions`.
 
-La clé est rangée hors du dossier des notes (`~/.config/markspot/dispatch.key` sous Linux, `%LOCALAPPDATA%\markspot-key\dispatch.key` sous Windows). Partage seulement le dossier des notes, pas tout ton dossier personnel : sinon la clé passe aussi par le partage, et une personne qui peut y écrire peut fabriquer un envoi.
+Either way, the session shows in "Send to" on its own, even when idle, and wakes up when you send notes. It does not need `markspot listen`.
 
-## Ajouter un navigateur
+This uses Claude Code channels, which are a research preview. For a server that is not an Anthropic-approved plugin, Claude Code opens channels only with the `--dangerously-load-development-channels server:markspot` flag, which Markspot adds for you:
 
-Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `src/cli/browsers.ts` : une entrée qui dit où le navigateur cherche le programme local sur chaque système. `install`, `uninstall` et `doctor` la prennent d'eux-mêmes. Ajoute son test dans `tests/unit/browsers.test.ts`.
+- at startup, Claude Code shows a warning and asks you to confirm "I am using this for local development";
+- the flag is meant for development, so its form can change from one Claude Code version to the next;
+- the regular `--channels` flag only accepts Anthropic-approved plugins. Markspot is not one, which is why listen mode stays the default;
+- channels need an interactive session (not `claude -p`) and a claude.ai login or a Console key. In a Team or Enterprise organization, an admin has to turn channels on.
 
-## Sécurité
+The message pushed into the session holds only the number, id and comment of each note. Claude reads the page data and the screenshots with `markspot_get_annotation`, as in listen mode.
 
-- Aucun processus n'écoute sur le réseau. Chrome ne laisse que l'extension Markspot, reconnue par son identifiant fixe, parler à l'hôte.
-- Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent : toute personne qui peut y écrire peut y déposer une note, que Claude lira comme une demande à évaluer.
-- Sur un site en développement (Vue, Svelte, React), la note garde le nom du composant et le chemin de son fichier source tel que l'outil de build le donne. Ce chemin peut contenir ton nom d'utilisateur ; il reste dans le dossier des notes et dans l'export.
-- Les captures ne sont pas encore masquées. Ce qui est affiché à l'écran au moment de la capture (un mot de passe affiché en clair, un jeton) va dans l'image et jusqu'au modèle. La vignette montrée avant l'envoi permet d'annuler.
+Claude Code does not confirm that it received the message, so the dispatch stays pending until Claude opens one of its notes. If nothing happens for 2 minutes (warning declined, channels turned off by an admin), the dispatch goes back in the queue and the session leaves "Send to" until its next tool call. Tell the session "listen to my annotations" and `markspot listen` picks up the dispatch.
 
-## Développer
+## Language
+
+The extension is in English by default and also in French. Right-click the Markspot toolbar icon, then "Language": "Auto (browser language)" uses French when the browser is in French and English otherwise, and "English" and "Français" set the language. The choice is kept in the browser.
+
+The question that `claude` asks at startup follows the terminal locale (`LC_ALL`, `LC_MESSAGES`, then `LANG`).
+
+## Two machines, one notes folder
+
+To annotate on one computer and let Claude Code fix the notes from another, both read the same notes folder over the network. Share only that folder (for example a Samba share `markspot-notes` whose path is `~/.local/share/markspot`). On the computer that does not hold the folder, install with `--data-dir` and an absolute path to the share, for example on Windows:
 
 ```sh
-npm run build       # dist/cli.js et extension/dist/
+markspot install --data-dir \\server\markspot-notes
+```
+
+The launchers and the host manifest stay on each computer. Only the notes go through the share.
+
+Both computers sign their "Send to Claude" dispatches with the same key. A session only accepts dispatches that are signed, less than 25 hours old and never seen before, so that a file dropped or copied on the share cannot wake it up. `install` creates the key on the first computer. Copy it once to the second:
+
+1. On the first computer, `markspot key` prints the key. Save it to a file (on a USB stick, for example).
+2. On the second, run `markspot install --key-file <that file>`, then delete the file.
+
+The key is kept outside the notes folder: `~/.config/markspot/dispatch.key` on Linux, `~/Library/Application Support/markspot-key/dispatch.key` on macOS and `%LOCALAPPDATA%\markspot-key\dispatch.key` on Windows. Share only the notes folder, never your whole home folder: the key would go through the share too, and anyone who can write to it could forge a dispatch.
+
+## Adding a browser
+
+Chromium-based browsers (Edge, Vivaldi, Arc…) are declared in `src/cli/browsers.ts`: one entry that says where the browser looks for the local program on each system. `install`, `uninstall` and `doctor` pick it up on their own. Add its test to `tests/unit/browsers.test.ts`.
+
+## Privacy and security
+
+- Markspot itself sends nothing outside your computer. It has no telemetry and no server. Notes and screenshots reach the model only through your own Claude Code session, when it reads them.
+- No process listens on the network. The browser only lets the Markspot extension, recognized by its fixed id, talk to the local program.
+- Screenshots are not masked yet ([issue #22](https://github.com/adryserage/Markspot/issues/22)). Whatever the screen shows at capture time (a password shown in clear, a token) goes into the image and on to the model. The preview in the comment box lets you cancel. Text typed in form fields is never stored in the note's data.
+- On third-party sites, the page's own scripts can read what you type in the comment box ([issue #23](https://github.com/adryserage/Markspot/issues/23)).
+- On a site in development (Vue, Svelte, React), the note keeps the component name and its source file path as the build tool reports it. That path can contain your user name. It stays in the notes folder and in exports.
+- On macOS and Linux, files are created with mode 0600 and folders with 0700. On a network share, the share's permissions apply: anyone who can write to it can drop a note. Claude treats every comment as a request to evaluate.
+- The dispatch key signs "Send to Claude" dispatches. Keep it secret, and keep it out of any shared folder (see [Two machines, one notes folder](#two-machines-one-notes-folder)).
+
+## Development
+
+```sh
+npm install
+npm run build       # dist/cli.js and extension/dist/
 npm run typecheck   # tsc --noEmit
-npm test            # tests unitaires (node --test)
+npm test            # unit tests (node --test)
+npm run smoke       # the built MCP server and markspot listen
+npm run e2e         # end-to-end tests on a dedicated Chrome with CDP on 127.0.0.1:9223
+npm run e2e:real    # a real Claude Code session end to end (costs a few turns)
 ```
 
-La conception est dans [docs/conception.md](docs/conception.md).
+`npm run e2e` does not build: run `npm run build` first. Set `MARKSPOT_CDP` to use another debugging port.
 
-## Licence
+The design notes are in [docs/conception.md](docs/conception.md) (in French).
 
-Apache 2.0. Voir les fichiers LICENSE et NOTICE (les polices Atkinson Hyperlegible sont sous licence SIL OFL 1.1).
+## License
+
+Apache 2.0. See the LICENSE and NOTICE files (the Atkinson Hyperlegible fonts are under the SIL OFL 1.1 license).
