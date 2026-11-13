@@ -8,7 +8,7 @@
 // L'identifiant de l'extension est calculé ici à partir de la clé publique du manifeste.
 
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
@@ -73,6 +73,11 @@ for (const weight of [400, 700]) {
 }
 // La licence SIL OFL demande que son texte accompagne chaque copie des polices.
 await copyFile("node_modules/@fontsource/atkinson-hyperlegible/LICENSE", join(dist, "fonts", "OFL.txt"));
+
+// Le manifeste a default_locale : Chrome refuse de charger l'extension sans _locales à côté.
+if (extensionRoot !== "extension") {
+  await cp("extension/_locales", join(extensionRoot, "_locales"), { recursive: true });
+}
 
 if (outDir && !trial) {
   await writeFile(join(extensionRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
