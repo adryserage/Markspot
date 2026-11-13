@@ -735,6 +735,7 @@ class Overlay {
       editButton.type = "button";
       editButton.addEventListener("click", (e) => {
         if (!e.isTrusted) return;
+        disarm();
         const restore = () => {
           this.#cardCancel = null;
           form.replaceWith(comment);
@@ -755,26 +756,38 @@ class Overlay {
         this.#cardCancel = restore;
       });
     }
-    // « Supprimer » : un second clic confirme ; Échap ou un délai annule.
+    // « Supprimer » : un second clic confirme ; Échap, « Modifier » ou 5 s sans clic annulent.
     const remove = el("button", "ghost danger-text", "Supprimer");
     remove.type = "button";
+    const problem = el("p", "hint error");
+    problem.hidden = true;
+    let disarmTimer = 0;
+    const disarm = () => {
+      clearTimeout(disarmTimer);
+      remove.classList.remove("confirming");
+      remove.textContent = "Supprimer";
+    };
     remove.addEventListener("click", async (e) => {
       if (!e.isTrusted) return;
+      problem.hidden = true;
       if (!remove.classList.contains("confirming")) {
         remove.classList.add("confirming");
         remove.textContent = "Confirmer la suppression";
-        this.#cardCancel = () => {
-          remove.classList.remove("confirming");
-          remove.textContent = "Supprimer";
-        };
+        this.#cardCancel = disarm;
+        disarmTimer = setTimeout(() => {
+          disarm();
+          if (this.#cardCancel === disarm) this.#cardCancel = null;
+        }, 5000) as unknown as number;
         return;
       }
       this.#cardCancel = null;
+      disarm();
       remove.disabled = true;
       const error = await this.#clearOne(note);
+      remove.disabled = false;
       if (error) {
-        remove.disabled = false;
-        remove.textContent = `Non supprimée : ${error}`;
+        problem.textContent = `Non supprimée : ${error}`;
+        problem.hidden = false;
       }
     });
     const toggle = el("button", "ghost", resolution ? "Rouvrir" : "Marquer réglée");
@@ -791,7 +804,7 @@ class Overlay {
     const actions = el("div", "actions");
     actions.append(toggle, ...(editButton ? [editButton] : []), remove, close);
     head.append(el("span", "grip"));
-    panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions);
+    panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions, problem);
     this.#openPanel(
       panel,
       () => {
