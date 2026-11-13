@@ -6,7 +6,7 @@ import { strict as assert } from "node:assert";
 import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { LOCAL_SCOPE, STYLE_PROPS, type NewAnnotation } from "../src/core/model.ts";
@@ -94,6 +94,17 @@ try {
     arguments: { after_seq: wokeData.last_seq, timeout_seconds: 5 },
   });
   assert.deepEqual((quiet.structuredContent as { annotations: unknown[] }).annotations, []);
+
+  // Sans canal, l'outil d'attente annonce la session et reçoit un envoi « Envoyer à Claude » qui la vise.
+  const waitProject = basename(process.cwd());
+  assert.ok((await store.listeners("http://localhost:3000/prix")).some((l) => l.name === waitProject), "the waiting session is listed in the page");
+  const waitingSend = client.callTool({ name: "markspot_wait_for_annotations", arguments: { after_seq: 999, timeout_seconds: 20 } });
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal((await store.send([second.id], "http://localhost:3000/prix", waitProject)).kind, "sent");
+  const delivered = (await waitingSend).structuredContent as { dispatch_id?: string; last_seq: number; annotations: Array<{ id: string }> };
+  assert.ok(delivered.dispatch_id, "the send wakes the wait call");
+  assert.deepEqual(delivered.annotations.map((a) => a.id), [second.id]);
+  assert.equal(delivered.last_seq, 999, "last_seq does not move on a send");
 
   const noState = await client.callTool({ name: "markspot_clear_annotations", arguments: {} });
   assert.equal(noState.isError, true, "clear without state must be refused");
