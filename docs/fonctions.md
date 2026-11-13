@@ -92,6 +92,10 @@ Quand un même projet écoute sur deux postes (le même dossier sous Linux et so
 
 Clic droit sur l'icône Markspot, « Exporter les notes », ou le bouton « Exporter ». Une page de l'extension rassemble chaque note, ses deux images, son état et la réponse de Claude dans un fichier JSON (format `markspot-export`), puis le télécharge. Si le téléchargement est annulé, la page garde un lien pour le refaire.
 
+### Changer la langue
+
+L'interface est en anglais ou en français. Clic droit sur l'icône Markspot, « Langue » (« Language » en anglais) : « Auto (langue du navigateur) » prend le français si le navigateur est en français et l'anglais sinon, « English » et « Français » fixent la langue. Le choix est gardé dans le navigateur. Les pages où le mode annotation est ouvert changent tout de suite : la barre, le menu des notes et la fiche ouverte. Une nouvelle note en cours d'écriture et une modification en cours gardent leur texte. Une note réglée à la main reçoit « Réglée à la main. » ou « Resolved by hand. » selon la langue du moment. La question de `markspot launch` suit la langue du terminal (`LC_ALL`, `LC_MESSAGES` puis `LANG`) : en français si elle commence par `fr`, en anglais sinon.
+
 ### La version d'essai
 
 `node build.mjs --trial <dossier>` construit une extension qui marche sans programme local ni Claude Code. Les notes restent dans le navigateur ; l'export permet de les donner à Claude. Le bouton « Envoyer à Claude » n'y est pas. Quand la version complète remplace l'essai dans le même dossier (`node build.mjs --out <dossier>` puis « Recharger »), les notes de l'essai partent au programme local.
