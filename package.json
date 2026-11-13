@@ -1,7 +1,15 @@
 {
   "name": "markspot",
   "version": "0.1.0",
-  "description": "Marque un endroit d'une page web et laisse une note : Claude Code la lit, corrige le code et répond sur la page.",
+  "description": "Mark a spot on a web page and leave a note: Claude Code reads it, fixes the code and answers on the page.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "mcp",
+    "chrome-extension",
+    "annotation",
+    "code-review"
+  ],
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
