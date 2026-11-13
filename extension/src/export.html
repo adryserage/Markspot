@@ -1,17 +1,17 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Exporter les notes Markspot</title>
+  <title data-i18n="export.pageTitle">Export Markspot notes</title>
   <link rel="stylesheet" href="export.css">
 </head>
 <body>
   <main>
-    <h1>Exporter les notes</h1>
-    <p id="status">Lecture des notes…</p>
-    <p><a id="download" hidden>Télécharger le fichier</a></p>
-    <p class="hint">Enregistre le fichier là où Claude Code peut le lire, par exemple dans le dossier du projet. Il contient les captures d'écran de tes notes : ne le partage pas sans les regarder.</p>
+    <h1 data-i18n="export.heading">Export notes</h1>
+    <p id="status" data-i18n="export.reading">Reading notes…</p>
+    <p><a id="download" hidden data-i18n="export.downloadFile">Download the file</a></p>
+    <p class="hint" data-i18n="export.hint">Save the file where Claude Code can read it, for example in the project folder. It holds the screenshots of your notes: do not share it without looking at them.</p>
   </main>
   <script type="module" src="export.js"></script>
 </body>
