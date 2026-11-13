@@ -16,12 +16,14 @@
     "extension/manifest.json",
     "extension/_locales/",
     "extension/dist/",
-    "skill/"
+    "skill/",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/",
