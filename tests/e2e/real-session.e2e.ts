@@ -13,6 +13,7 @@ import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { liveListeners } from "../../src/store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
 const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
@@ -91,6 +92,7 @@ const browser = await chromium.connectOverCDP(CDP_URL);
 const cdp = await browser.newBrowserCDPSession();
 const context = browser.contexts()[0]!;
 let page: Page | undefined;
+let restoreLang: (() => Promise<void>) | undefined;
 try {
   log(`session « ${PROJECT} » lancée, attente de son annonce`);
   let listed = false;
@@ -112,6 +114,7 @@ try {
   } finally {
     ready.close();
   }
+  restoreLang = await useFrench(CDP_URL, EXTENSION_ID);
   const opened = context.waitForEvent("page", (p) => p.url().startsWith(url));
   await cdp.send("Target.createTarget", { url, newWindow: true });
   page = await opened;
@@ -183,6 +186,7 @@ try {
   await page.screenshot({ path: join(ARTIFACTS, "reel-2-reglee.png") });
   console.log("real session test passed");
 } finally {
+  await restoreLang?.().catch((error: Error) => console.error(`warning: language not restored (${error.message})`));
   await writeFile(stopFile, "");
   await sleep(3000);
   session.kill("SIGKILL");
