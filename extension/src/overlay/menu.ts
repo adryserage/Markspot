@@ -41,7 +41,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 function menuComment(comment: string): HTMLSpanElement {
   const flat = comment.replace(/\s+/g, " ").trim();
   // Un caractère de plus : si le 91e est une espace, le 90e mot est entier et reste.
-  const words = flat.slice(0, 91).replace(/\s+\S*$/, "");
+  const head = flat.slice(0, 91);
+  const words = /\s/.test(head) ? head.replace(/\s+\S*$/, "") : ""; // un seul mot : coupé net à 90
   const cut = flat.length <= 90 ? flat : `${(words || flat.slice(0, 90)).trimEnd()}…`;
   const span = el("span", "menu-comment", cut);
   span.title = flat;
