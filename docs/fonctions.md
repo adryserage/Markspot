@@ -51,7 +51,7 @@ Une note a un de ces états :
 - « Ouverte » : à régler ;
 - « Réglée » : la fiche montre « Réponse de Claude » avec sa réponse, ou « Réglée par toi ».
 
-« Marquer réglée » et « Rouvrir », dans la fiche comme dans le menu, changent l'état à la main.
+« Marquer réglée » et « Rouvrir », dans la fiche comme dans le menu, changent l'état à la main. Dans la fiche, « Modifier » change le commentaire d'une note pas encore réglée (Échap annule), et « Supprimer » retire la note après un second clic sur « Confirmer la suppression ».
 
 ### Le menu des notes
 
@@ -62,6 +62,7 @@ Le bouton en haut à droite de la page (« 1 note », « 3 notes ») ouvre le me
 - un clic sur une note va à sa pastille ;
 - « Modifier » change le commentaire, « Enregistrer » le garde ;
 - « Marquer réglée » ou « Rouvrir » change son état ;
+- « Supprimer » retire cette note seule, après « Oui, supprimer » (« Non » ou Échap annule) ;
 - « Envoyer à » choisit la session Claude Code qui reçoit les notes, et « Rafraîchir » relit la liste (voir plus bas) ;
 - « Envoyer à Claude » envoie les notes ouvertes à cette session ;
 - « Effacer les notes réglées » retire les notes réglées de la page ;
