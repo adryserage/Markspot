@@ -164,7 +164,7 @@ Les navigateurs basés sur Chromium (Edge, Vivaldi, Arc…) se déclarent dans `
 - Les captures ne sont pas encore masquées ([issue #22](https://github.com/adryserage/Markspot/issues/22)). Ce que l'écran montre au moment de la capture (un mot de passe affiché en clair, un jeton) va dans l'image et jusqu'au modèle. L'aperçu dans la boîte de commentaire permet d'annuler. Le texte tapé dans un champ de formulaire n'est jamais gardé dans les données de la note.
 - Sur un site tiers, les scripts de la page peuvent lire ce que tu tapes dans la boîte de commentaire ([issue #23](https://github.com/adryserage/Markspot/issues/23)).
 - Sur un site en développement (Vue, Svelte, React), la note garde le nom du composant et le chemin de son fichier source tel que l'outil de build le donne. Ce chemin peut contenir ton nom d'utilisateur. Il reste dans le dossier des notes et dans l'export.
-- Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent : toute personne qui peut y écrire peut y déposer une note, que Claude lit comme une demande à évaluer, jamais comme un ordre.
+- Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent : toute personne qui peut y écrire peut y déposer une note. Claude traite chaque commentaire comme une demande à évaluer.
 - La clé d'envoi signe les envois « Envoyer à Claude ». Garde-la secrète, et hors de tout dossier partagé (voir [Deux postes, un seul dossier de notes](#deux-postes-un-seul-dossier-de-notes)).
 
 ## Développer
