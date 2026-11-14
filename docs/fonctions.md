@@ -121,7 +121,7 @@ Une note qu'il ne peut pas régler reste ouverte, avec la raison.
 Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.fr.md#envoyer-les-notes-à-claude) :
 
 - le mode écoute : dis « écoute mes annotations ». Claude lance `markspot listen` en tâche de fond, qui n'use aucun jeton pendant l'attente ;
-- le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds oui (ou rien pendant 5 s) à « Markspot écoute cette session ? », ou lance `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
+- le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds `o` (sans réponse en 5 s, c'est non) à « Markspot écoute cette session ? », ou lance `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
 
 ### Les outils MCP
 
