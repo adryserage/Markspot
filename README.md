@@ -105,10 +105,10 @@ If Claude waits with the `markspot_wait_for_annotations` tool instead of the com
 After `install`, there is nothing to remember. When you start `claude` in a terminal, Markspot asks:
 
 ```text
-Should Markspot listen to this session? [Y/n] (yes in 5 s)
+Should Markspot listen to this session? [y/N] (no in 5 s)
 ```
 
-Enter, any other key or no answer for 5 seconds means yes. `n` starts Claude without Markspot, and Ctrl+C starts nothing. The question is in French when your terminal locale starts with `fr`.
+`y` (or `o`) starts Claude with Markspot. Enter, any other key or no answer for 5 seconds starts Claude without it, and Ctrl+C starts nothing. The question is in French when your terminal locale starts with `fr`.
 
 - The question is skipped when a session already listens to this project (same folder name) on this computer. The new session then starts without Markspot.
 - `claude -p`, `claude mcp …`, `claude --version` and scripts are left alone.

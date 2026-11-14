@@ -1,6 +1,6 @@
 {
   "name": "markspot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mark a spot on a web page and leave a note: Claude Code reads it, fixes the code and answers on the page.",
   "keywords": [
     "claude",

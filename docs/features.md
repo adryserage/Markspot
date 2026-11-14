@@ -123,7 +123,7 @@ A note it cannot fix stays open, with the reason.
 A session receives "Send to Claude" dispatches in two ways, described in the [README](../README.md#sending-notes-to-claude):
 
 - listen mode: say "listen to my annotations". Claude runs `markspot listen` as a background command, which uses no tokens while it waits;
-- automatic wake-up: after `markspot install`, start `claude` as usual and answer yes (or nothing for 5 s) to "Should Markspot listen to this session?", or run `markspot claude`. The session shows in "Send to" on its own and wakes up at each dispatch (Claude Code channels, research preview). A dispatch that Claude does not open within 2 minutes goes back in the queue.
+- automatic wake-up: after `markspot install`, start `claude` as usual and answer `y` (no answer within 5 s means no) to "Should Markspot listen to this session?", or run `markspot claude`. The session shows in "Send to" on its own and wakes up at each dispatch (Claude Code channels, research preview). A dispatch that Claude does not open within 2 minutes goes back in the queue.
 
 ### MCP tools
 
