@@ -105,10 +105,10 @@ Si Claude attend avec l'outil `markspot_wait_for_annotations` plutôt qu'avec la
 Après `install`, rien à retenir. Quand tu lances `claude` dans un terminal, Markspot demande :
 
 ```text
-Markspot écoute cette session ? [O/n] (oui dans 5 s)
+Markspot écoute cette session ? [o/N] (non dans 5 s)
 ```
 
-Entrée, une autre touche ou rien pendant 5 secondes : oui. `n` lance Claude sans Markspot, et Ctrl+C ne lance rien. La question est en français quand la locale du terminal commence par `fr`, en anglais sinon (« Should Markspot listen to this session? [Y/n] (yes in 5 s) »).
+`o` (ou `y`) lance Claude avec Markspot. Entrée, une autre touche ou rien pendant 5 secondes le lance sans Markspot, et Ctrl+C ne lance rien. La question est en français quand la locale du terminal commence par `fr`, en anglais sinon (« Should Markspot listen to this session? [y/N] (no in 5 s) »).
 
 - La question ne vient pas si une session écoute déjà ce projet (même nom de dossier) sur ce poste. La nouvelle session démarre alors sans Markspot.
 - `claude -p`, `claude mcp …`, `claude --version` et les scripts ne sont pas touchés.

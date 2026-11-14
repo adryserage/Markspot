@@ -1,5 +1,5 @@
 // markspot launch [options de claude] : ce que lance la fonction `claude` ajoutée par install.
-// Une session interactive peut écouter Markspot (canal) : on le demande, oui par défaut au bout
+// Une session interactive peut écouter Markspot (canal) : on le demande, non par défaut au bout
 // de 5 s, sauf si une session écoute déjà ce projet sur ce poste. Les options passent telles
 // quelles à claude : aucun mode de permission n'est ajouté, la personne garde le sien.
 
@@ -48,11 +48,17 @@ export interface PromptText {
   no: string;
 }
 
-/** En français si la locale commence par fr, en anglais sinon. n ou N vaut non dans les deux. */
+/** En français si la locale commence par fr, en anglais sinon. o ou y vaut oui dans les deux. */
 export function promptText(locale: string): PromptText {
   return /^fr/i.test(locale)
-    ? { question: "Markspot écoute cette session ? [O/n] (oui dans 5 s) ", yes: "oui", no: "non" }
-    : { question: "Should Markspot listen to this session? [Y/n] (yes in 5 s) ", yes: "yes", no: "no" };
+    ? { question: "Markspot écoute cette session ? [o/N] (non dans 5 s) ", yes: "oui", no: "non" }
+    : { question: "Should Markspot listen to this session? [y/N] (no in 5 s) ", yes: "yes", no: "no" };
+}
+
+/** La réponse pour une touche. true : o, O, y ou Y ; null : Ctrl+C ; false : toute autre touche. Pur. */
+export function answerFor(key: string): boolean | null {
+  if (key === "\u0003") return null;
+  return /^[oOyY]/.test(key);
 }
 
 /** La locale du terminal : LC_ALL, LC_MESSAGES puis LANG (la première non vide), sinon celle d'Intl. */
@@ -67,7 +73,7 @@ export function terminalLocale(
   return fallback;
 }
 
-/** Une touche, 5 s au plus. true : oui (Entrée, autre touche ou rien) ; false : n ; null : Ctrl+C. */
+/** Une touche, 5 s au plus. true : o ou y ; false : Entrée, autre touche ou rien ; null : Ctrl+C. */
 function askOnce(): Promise<boolean | null> {
   const text = promptText(terminalLocale(process.env));
   return new Promise((resolve) => {
@@ -82,12 +88,8 @@ function askOnce(): Promise<boolean | null> {
       process.stdout.write(answer === null ? "\n" : `${answer ? text.yes : text.no}\n`);
       resolve(answer);
     };
-    const onData = (chunk: Buffer) => {
-      const key = chunk.toString("utf8");
-      if (key === "\u0003") finish(null);
-      else finish(!/^[nN]/.test(key));
-    };
-    const timer = setTimeout(() => finish(true), 5000);
+    const onData = (chunk: Buffer) => finish(answerFor(chunk.toString("utf8")));
+    const timer = setTimeout(() => finish(false), 5000);
     stdin.resume();
     stdin.on("data", onData);
   });
