@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync } from "node:zlib";
 import { build } from "esbuild";
-import { extensionIdFromKey } from "./src/core/extension-id.ts";
+import { extensionIdFromKey } from "./src/cli/extension-id.ts";
 
 const manifest = JSON.parse(await readFile("extension/manifest.json", "utf8"));
 const pkg = JSON.parse(await readFile("package.json", "utf8"));

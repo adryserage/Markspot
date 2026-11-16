@@ -21,7 +21,7 @@ npm install -g markspot
 markspot install
 ```
 
-`install` cannot load the extension in your browser by itself, so it ends with a "to do" line that names the extension folder. That folder is `extension` inside the installed package, which is `$(npm root -g)/markspot/extension`. Load it once:
+The extension is under review on the Chrome Web Store. Until it is published there, load it from the package. `install` cannot load the extension in your browser by itself, so it ends with a "to do" line that names the extension folder. That folder is `extension` inside the installed package, which is `$(npm root -g)/markspot/extension`. Load it once:
 
 1. Open `chrome://extensions` (or `brave://extensions`) and turn on developer mode.
 2. Click "Load unpacked" and choose that folder.
@@ -30,6 +30,17 @@ markspot install
 5. Run `markspot doctor` to check every step.
 
 If Alt+C does nothing, set the shortcut in `chrome://extensions/shortcuts`.
+
+### Updating
+
+```sh
+npm install -g markspot
+markspot install
+```
+
+`install` redoes only the steps that changed. Then click the reload button of Markspot in `chrome://extensions`. Do not use `markspot uninstall` to update: it also deletes your notes.
+
+Version 0.3.0 gives the extension a new id, the one it has on the Chrome Web Store. When you update from 0.2.0 or older, remove the old Markspot extension in `chrome://extensions`, then load the `extension` folder again.
 
 ### From source
 
