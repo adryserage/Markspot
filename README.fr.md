@@ -21,7 +21,7 @@ npm install -g markspot
 markspot install
 ```
 
-`install` ne peut pas charger l'extension dans le navigateur tout seul : il finit par une ligne « to do » qui donne le dossier de l'extension. Ce dossier est `extension`, dans le paquet installé, soit `$(npm root -g)/markspot/extension`. Charge-le une fois :
+L'extension est en cours d'examen sur le Chrome Web Store. D'ici sa publication, charge-la depuis le paquet. `install` ne peut pas charger l'extension dans le navigateur tout seul : il finit par une ligne « to do » qui donne le dossier de l'extension. Ce dossier est `extension`, dans le paquet installé, soit `$(npm root -g)/markspot/extension`. Charge-le une fois :
 
 1. Ouvre `chrome://extensions` (ou `brave://extensions`) et active le mode développeur.
 2. Clique sur « Charger l'extension non empaquetée » et choisis ce dossier.
@@ -30,6 +30,17 @@ markspot install
 5. Lance `markspot doctor` pour vérifier chaque étape.
 
 Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
+
+### Mettre à jour
+
+```sh
+npm install -g markspot
+markspot install
+```
+
+`install` refait seulement les étapes qui ont changé. Clique ensuite sur le bouton de rechargement de Markspot dans `chrome://extensions`. N'utilise pas `markspot uninstall` pour mettre à jour : il supprime aussi tes notes.
+
+La version 0.3.0 donne à l'extension un nouvel identifiant, celui qu'elle a sur le Chrome Web Store. Si tu mets à jour depuis la 0.2.0 ou plus ancienne, retire l'ancienne extension Markspot dans `chrome://extensions`, puis charge de nouveau le dossier `extension`.
 
 ### Depuis les sources
 

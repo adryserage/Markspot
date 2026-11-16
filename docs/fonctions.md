@@ -139,7 +139,7 @@ Les données de la page (adresse, titre, texte, attributs) arrivent dans un bloc
 
 Après `npm install -g markspot`, la commande `markspot` est dans le `PATH`. `install` écrit aussi un lanceur : `~/.local/share/markspot/bin/markspot` sous Linux, `~/Library/Application Support/markspot/bin/markspot` sous macOS et `%LOCALAPPDATA%\markspot\bin\markspot.bat` sous Windows. Depuis un clone du dépôt, `node dist/cli.js` fait la même chose.
 
-- `markspot install` : installe le programme local pour Chrome et Brave, la fonction `claude` du shell, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste, `--no-shell` et `--shell` (voir le [README](../README.fr.md#options)) ;
+- `markspot install` : installe le programme local pour Chrome et Brave, la fonction `claude` du shell, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste, `--no-shell` et `--shell` (voir le [README](../README.fr.md#options)). Relance-le après chaque mise à jour : il refait seulement les étapes qui ont changé ;
 - `markspot key` : affiche la clé d'envoi de ce poste, à recopier une fois sur l'autre. Garde-la secrète ;
 - `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et, avec `--cdp`, l'aller-retour entre l'extension et le programme local ;
 - `markspot uninstall` : défait chaque étape, puis supprime les notes et les dossiers de Markspot (un dossier de notes choisi avec `--data-dir` reste) ;
