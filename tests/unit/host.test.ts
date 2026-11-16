@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
 import type { Thread } from "../../src/core/model.ts";
+import type { WakeUp } from "../../src/core/protocol.ts";
 import { FrameDecoder, encodeFrame, runHost } from "../../src/host/host.ts";
 import type { HostStore, ThreadChange } from "../../src/store/store.ts";
 
@@ -25,9 +26,11 @@ function collect(stream: PassThrough): () => unknown[] {
 
 const thread = { annotation: { id: "01JD8000000000000000000001", seq: 1 }, resolution: null } as unknown as Thread;
 
-function fakeStore(): HostStore & { emit(change: ThreadChange): void } {
+function fakeStore(): HostStore & { emit(change: ThreadChange): void; saved: WakeUp[] } {
   let listener: (c: ThreadChange) => void = () => {};
+  const saved: WakeUp[] = [];
   return {
+    saved,
     list: async () => [thread],
     get: async () => thread,
     capture: async () => new Uint8Array([7, 8]),
@@ -39,6 +42,11 @@ function fakeStore(): HostStore & { emit(change: ThreadChange): void } {
     reopen: async () => ({ kind: "reopened", thread }),
     send: async () => ({ kind: "sent", to: "markspot", listening: 1 }),
     listeners: async () => [],
+    wakeUp: async () => saved.at(-1) ?? "ask",
+    setWakeUp: async (value) => {
+      saved.push(value);
+      return value;
+    },
     watch(onChange) {
       listener = onChange;
       return { close() {} };
@@ -120,6 +128,43 @@ test("host rejects any other caller, exits 1 and never opens the store", async (
   });
   assert.equal(code, 1);
   assert.equal(opened, false);
+  assert.deepEqual(received(), [
+    { type: "rejected", requestId: null, reason: "unexpected caller chrome-extension://someoneelse/" },
+  ]);
+});
+
+test("host reads and saves the wake-up choice, and refuses any other value without saving it", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const received = collect(output);
+  const store = fakeStore();
+  const done = runHost(options(input, output, store));
+  input.write(frame({ type: "getWakeUp", requestId: 1 }));
+  input.write(frame({ type: "setWakeUp", requestId: 2, wakeUp: "on" }));
+  input.write(frame({ type: "setWakeUp", requestId: 3, wakeUp: "--dangerously-skip-permissions" }));
+  input.write(frame({ type: "setWakeUp", requestId: 4 }));
+  input.write(frame({ type: "getWakeUp", requestId: 5 }));
+  input.end();
+  assert.equal(await done, 0);
+  assert.deepEqual(store.saved, ["on"]);
+  assert.deepEqual(received(), [
+    { type: "wakeUp", requestId: 1, wakeUp: "ask" },
+    { type: "wakeUp", requestId: 2, wakeUp: "on" },
+    { type: "rejected", requestId: 3, reason: "invalid message" },
+    { type: "rejected", requestId: 4, reason: "invalid message" },
+    { type: "wakeUp", requestId: 5, wakeUp: "on" },
+  ]);
+});
+
+test("another caller cannot change the wake-up choice", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const received = collect(output);
+  const store = fakeStore();
+  input.write(frame({ type: "setWakeUp", requestId: 1, wakeUp: "on" }));
+  const code = await runHost({ ...options(input, output, store), origin: "chrome-extension://someoneelse/" });
+  assert.equal(code, 1);
+  assert.deepEqual(store.saved, []);
   assert.deepEqual(received(), [
     { type: "rejected", requestId: null, reason: "unexpected caller chrome-extension://someoneelse/" },
   ]);

@@ -18,7 +18,7 @@ import {
 } from "../../src/core/model.ts";
 import { sanitizeStrokes } from "../../src/core/drawing.ts";
 import { currentLang, parseLangChoice, setLang, t, type Key, type LangChoice } from "../../src/core/i18n.ts";
-import type { SendTarget } from "../../src/core/protocol.ts";
+import type { SendTarget, WakeUp } from "../../src/core/protocol.ts";
 import { burnStrokes, captureTab } from "./capture.ts";
 import { LANG_KEY, langOf, readLangChoice } from "./lang.ts";
 import { sourceHintFor } from "./source-hint.ts";
@@ -127,7 +127,9 @@ host.onConnected(async () => {
   threads.clear();
   await host.request({ type: "sync" }).catch(() => null);
   await flushOutbox();
+  await loadWakeUp();
 });
+host.onDisconnected(() => void showWakeUp(null));
 
 /**
  * Retire des notes de cette page, et seulement de celle-ci. Passe après l'envoi de la file en
@@ -400,9 +402,17 @@ const LANG_ITEMS: ReadonlyArray<{ id: string; choice: LangChoice; title: Key }> 
   { id: "markspot-lang-en", choice: "en", title: "worker.langEn" },
   { id: "markspot-lang-fr", choice: "fr", title: "worker.langFr" },
 ];
+const WAKE_MENU = "markspot-wake";
+const WAKE_ITEMS: ReadonlyArray<{ id: string; choice: WakeUp; title: Key }> = [
+  { id: "markspot-wake-ask", choice: "ask", title: "worker.wakeAsk" },
+  { id: "markspot-wake-on", choice: "on", title: "worker.wakeOn" },
+  { id: "markspot-wake-off", choice: "off", title: "worker.wakeOff" },
+];
 
 /** Le choix gardé dans le stockage (« auto » : la langue du navigateur). */
 let langChoice: LangChoice = "auto";
+/** Le réveil automatique lu par le programme local ; null : pas de programme local, pas de sous-menu. */
+let wakeUp: WakeUp | null = null;
 let menus: Promise<void> = Promise.resolve();
 
 /** Refait le menu de l'icône dans la langue courante. En file : deux reconstructions ne se croisent pas. */
@@ -422,6 +432,11 @@ function buildMenus(): Promise<void> {
       for (const item of LANG_ITEMS) {
         await create({ id: item.id, parentId: LANG_MENU, type: "radio", title: t(item.title), checked: item.choice === langChoice, contexts: ["action"] });
       }
+      if (wakeUp === null) return;
+      await create({ id: WAKE_MENU, title: t("worker.wakeMenu"), contexts: ["action"] });
+      for (const item of WAKE_ITEMS) {
+        await create({ id: item.id, parentId: WAKE_MENU, type: "radio", title: t(item.title), checked: item.choice === wakeUp, contexts: ["action"] });
+      }
     })
     .catch(() => undefined);
   return menus;
@@ -436,6 +451,25 @@ async function applyLangChoice(choice: LangChoice): Promise<void> {
   if (changed) broadcastAll({ type: "lang", lang });
   await chrome.action.setTitle({ title: t("worker.actionTitle") }).catch(() => undefined);
   await buildMenus();
+}
+
+/** Montre le sous-menu avec cette valeur cochée, ou le cache (null). */
+async function showWakeUp(value: WakeUp | null): Promise<void> {
+  await ready;
+  wakeUp = value;
+  await buildMenus();
+}
+
+async function loadWakeUp(): Promise<void> {
+  const reply = await host.request({ type: "getWakeUp" }).catch(() => null);
+  // Un programme local plus ancien refuse la demande : pas de sous-menu.
+  await showWakeUp(reply?.type === "wakeUp" ? reply.wakeUp : null);
+}
+
+/** Chrome coche l'élément cliqué tout de suite : le menu est refait avec la valeur gardée, ou l'ancienne en cas d'échec. */
+async function chooseWakeUp(choice: WakeUp): Promise<void> {
+  const reply = await host.request({ type: "setWakeUp", wakeUp: choice }).catch(() => null);
+  await showWakeUp(reply?.type === "wakeUp" ? reply.wakeUp : wakeUp);
 }
 
 /** La langue est lue au démarrage du worker : answer() l'attend avant de produire un texte. */
@@ -459,7 +493,9 @@ async function openExportPage(nextTo?: chrome.tabs.Tab): Promise<void> {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === EXPORT_MENU) await openExportPage(tab);
+  if (info.menuItemId === EXPORT_MENU) return openExportPage(tab);
+  const wake = WAKE_ITEMS.find((i) => i.id === info.menuItemId);
+  if (wake) return chooseWakeUp(wake.choice);
   const item = LANG_ITEMS.find((i) => i.id === info.menuItemId);
   if (!item) return;
   await ready;

@@ -1,21 +1,24 @@
 // markspot launch [options de claude] : ce que lance la fonction `claude` ajoutée par install.
-// Une session interactive peut écouter Markspot (canal) : on le demande, non par défaut au bout
-// de 5 s, sauf si une session écoute déjà ce projet sur ce poste. Les options passent telles
-// quelles à claude : aucun mode de permission n'est ajouté, la personne garde le sien.
+// Une session interactive peut écouter Markspot (canal). Le réveil automatique, choisi dans le
+// menu de l'icône et gardé dans le dossier des notes, dit quoi faire : poser la question (non par
+// défaut au bout de 5 s), lancer avec Markspot ou sans. Si une session écoute déjà ce projet sur
+// ce poste, claude part sans canal. Les options passent telles quelles à claude : aucun mode de
+// permission n'est ajouté, la personne garde le sien.
 
 import { spawn } from "node:child_process";
 import { constants, hostname } from "node:os";
 import { basename } from "node:path";
+import type { WakeUp } from "../core/protocol.ts";
 import { cleanName, liveListeners } from "../store/dispatch.ts";
-import { loadConfig } from "../store/store.ts";
+import { loadConfig, readWakeUp } from "../store/store.ts";
 import { claudeCommand, realProbe } from "./claude-command.ts";
 
-/** Sous-commandes de claude qui n'ouvrent pas de session : pas de question. */
+/** Sous-commandes de claude qui n'ouvrent pas de session : ni question ni canal. */
 const NOT_A_SESSION = new Set(["mcp", "config", "update", "doctor", "install", "migrate-installer", "setup-token", "plugin", "auth", "login", "logout"]);
 const NO_SESSION_FLAGS = new Set(["-p", "--print", "-v", "--version", "-h", "--help"]);
 
-/** Faut-il poser la question ? Pur. */
-export function shouldAsk(args: string[], env: Record<string, string | undefined>, interactive: boolean): boolean {
+/** Ce lancement ouvre-t-il une session interactive qui pourrait écouter ? Pur. */
+export function opensSession(args: string[], env: Record<string, string | undefined>, interactive: boolean): boolean {
   if (!interactive) return false;
   if (env.MARKSPOT_CHANNEL === "1") return false; // déjà lancé par markspot (appel imbriqué)
   if (args.some((a) => NO_SESSION_FLAGS.has(a))) return false;
@@ -29,15 +32,26 @@ export function exitCodeOf(code: number | null, signal: NodeJS.Signals | null): 
   return signal ? 128 + (constants.signals[signal] ?? 0) : 1;
 }
 
-/** Une session écoute-t-elle déjà ce projet (nom du dossier) sur ce poste ? */
-async function alreadyListening(): Promise<boolean> {
+/** Comment claude démarre : après la question, avec Markspot (canal) ou sans. */
+export type Start = "ask" | "channel" | "plain";
+
+const START_FOR: Record<WakeUp, Start> = { ask: "ask", on: "channel", off: "plain" };
+
+/** Pur. Une session qui écoute déjà ce projet sur ce poste garde l'écoute : la nouvelle part sans canal. */
+export function startFor(wakeUp: WakeUp, alreadyListening: boolean): Start {
+  return alreadyListening ? "plain" : START_FOR[wakeUp];
+}
+
+/** Le réveil choisi pour le dossier des notes, et si une session écoute déjà ce projet (nom du dossier) sur ce poste. */
+async function readStart(): Promise<Start> {
   try {
-    const config = await loadConfig();
+    const { dataDir } = await loadConfig();
     const name = cleanName(basename(process.cwd()));
     const host = hostname().slice(0, 80);
-    return (await liveListeners(config.dataDir)).some((l) => l.name === name && l.host === host);
+    const [wakeUp, listeners] = await Promise.all([readWakeUp(dataDir), liveListeners(dataDir)]);
+    return startFor(wakeUp, listeners.some((l) => l.name === name && l.host === host));
   } catch {
-    return false;
+    return "ask";
   }
 }
 
@@ -99,10 +113,13 @@ export async function launch(args: string[]): Promise<number> {
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function");
   const env: NodeJS.ProcessEnv = { ...process.env };
   let channel = false;
-  if (shouldAsk(args, env, interactive) && !(await alreadyListening())) {
-    const answer = await askOnce();
-    if (answer === null) return 130;
-    channel = answer;
+  if (opensSession(args, env, interactive)) {
+    const start = await readStart();
+    if (start === "ask") {
+      const answer = await askOnce();
+      if (answer === null) return 130;
+      channel = answer;
+    } else channel = start === "channel";
   }
   // Sans canal, la variable ne passe pas : un claude -p imbriqué ne s'annoncerait pas comme écoute.
   if (channel) env.MARKSPOT_CHANNEL = "1";

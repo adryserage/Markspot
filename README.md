@@ -113,7 +113,7 @@ If Claude waits with the `markspot_wait_for_annotations` tool instead of the com
 
 ### Automatic wake-up (research preview)
 
-After `install`, there is nothing to remember. When you start `claude` in a terminal, Markspot asks:
+After `install`, there is nothing to remember. By default, when you start `claude` in a terminal, Markspot asks:
 
 ```text
 Should Markspot listen to this session? [y/N] (no in 5 s)
@@ -121,7 +121,9 @@ Should Markspot listen to this session? [y/N] (no in 5 s)
 
 `y` (or `o`) starts Claude with Markspot. Enter, any other key or no answer for 5 seconds starts Claude without it, and Ctrl+C starts nothing. The question is in French when your terminal locale starts with `fr`.
 
-- The question is skipped when a session already listens to this project (same folder name) on this computer. The new session then starts without Markspot.
+To change this, right-click the Markspot toolbar icon, then "Automatic wake-up". "Ask each time" asks the question above. "Always" starts Claude with Markspot, and "Never" starts it without Markspot, both without asking. The choice is saved in the notes folder, so every computer that uses that folder follows it. The menu shows only while the extension is connected to the local program.
+
+- When a session already listens to this project (same folder name) on this computer, the new session starts without Markspot and without the question, whatever the choice.
 - `claude -p`, `claude mcp …`, `claude --version` and scripts are left alone.
 - Your options reach `claude` unchanged, your permission mode included.
 - To start Claude without this function, run `command claude` (sh, zsh), or install with `--no-shell`.

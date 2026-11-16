@@ -134,6 +134,10 @@ export const en = {
   "worker.langAuto": "Auto (browser language)",
   "worker.langEn": "English",
   "worker.langFr": "Français",
+  "worker.wakeMenu": "Automatic wake-up",
+  "worker.wakeAsk": "Ask each time",
+  "worker.wakeOn": "Always",
+  "worker.wakeOff": "Never",
 
   // Page d'export
   "export.pageTitle": "Export Markspot notes",
@@ -271,6 +275,10 @@ export const fr = {
   "worker.langAuto": "Auto (langue du navigateur)",
   "worker.langEn": "English",
   "worker.langFr": "Français",
+  "worker.wakeMenu": "Réveil automatique",
+  "worker.wakeAsk": "Demander à chaque fois",
+  "worker.wakeOn": "Toujours",
+  "worker.wakeOff": "Jamais",
 
   "export.pageTitle": "Exporter les notes Markspot",
   "export.heading": "Exporter les notes",
