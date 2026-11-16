@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Forfaits · Fieldnote</title>
+<style>
+  body { margin: 0; font: 16px/1.5 Georgia, "Times New Roman", serif; background: #e7eeea; color: #1d2530; }
+  header { background: #1f3a2e; color: #ffffff; padding: 64px calc(50% - 400px) 20px; }
+  header h1 { margin: 0; font-size: 30px; }
+  main { padding: 20px calc(50% - 400px); }
+  .plans { display: flex; gap: 48px; margin-top: 12px; }
+  .plan { width: 300px; background: #fff; border: 1px solid #d8d3c8; border-radius: 6px; padding: 24px; }
+  .plan h2 { margin: 0 0 8px; font-size: 24px; }
+  .price { margin: 0 0 20px; }
+  .buy { display: block; width: 360px; padding: 10px; border: 0; border-radius: 4px; background: #c2410c; color: #fff; font: 16px sans-serif; }
+</style>
+</head>
+<body>
+<header><h1>Choisis ton forfait</h1></header>
+<main>
+  <p>Chaque forfait comprend des notes de terrain illimitées et la synchronisation hors ligne.</p>
+  <div class="plans">
+    <section class="plan"><h2>Starter</h2><p class="price">9 $ par mois</p><button class="buy" id="buy-starter">Démarrer Starter</button></section>
+    <section class="plan"><h2>Équipe</h2><p class="price">29 $ par mois</p><button class="buy" id="buy-team" style="width:100%">Démarrer Équipe</button></section>
+  </div>
+</main>
+</body>
+</html>
