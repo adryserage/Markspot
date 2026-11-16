@@ -20,6 +20,13 @@ export interface PublicListener {
   since: string;
 }
 
+/**
+ * Réveil automatique, choisi dans le menu de l'icône et gardé dans le dossier des notes :
+ * ask pose la question au lancement de claude, on lance avec Markspot, off sans.
+ */
+export const WAKE_UPS = ["ask", "on", "off"] as const;
+export type WakeUp = (typeof WAKE_UPS)[number];
+
 export const HOST_NAME = "com.markspot.host";
 export const MAX_FRAME_TO_EXTENSION = 1024 * 1024;
 export const MAX_FRAME_TO_HOST = 64 * 1024 * 1024;
@@ -44,7 +51,10 @@ export type ExtensionToHost =
   /** « Envoyer à Claude » : ces notes, depuis cette page, au projet `to` (ou au seul qui écoute). */
   | { type: "send"; requestId: number; ids: AnnotationId[]; url: string; to?: string; host?: string }
   /** Les sessions qui écoutent cette adresse. */
-  | { type: "listeners"; requestId: number; url: string };
+  | { type: "listeners"; requestId: number; url: string }
+  /** Le réveil automatique gardé dans le dossier des notes ; « wakeUp » répond aux deux. */
+  | { type: "getWakeUp"; requestId: number }
+  | { type: "setWakeUp"; requestId: number; wakeUp: WakeUp };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
@@ -59,6 +69,8 @@ export type HostReply =
   /** Plusieurs projets écoutent et aucun n'est choisi ; ou la liste demandée. */
   | { type: "choose"; requestId: number; listeners: PublicListener[] }
   | { type: "listeners"; requestId: number; listeners: PublicListener[] }
+  /** La valeur relue dans le dossier, après l'écriture pour setWakeUp. */
+  | { type: "wakeUp"; requestId: number; wakeUp: WakeUp }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =
