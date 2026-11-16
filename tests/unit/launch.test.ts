@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { answerFor, exitCodeOf, promptText, shouldAsk, terminalLocale } from "../../src/cli/launch.ts";
+import { answerFor, exitCodeOf, opensSession, promptText, startFor, terminalLocale } from "../../src/cli/launch.ts";
 
 test("only o or y starts the listening session; Enter and other keys say no", () => {
   for (const key of ["o", "O", "y", "Y", "oui", "yes"]) assert.equal(answerFor(key), true, key);
@@ -8,14 +8,24 @@ test("only o or y starts the listening session; Enter and other keys say no", ()
   assert.equal(answerFor("\u0003"), null, "Ctrl+C");
 });
 
-test("the question is asked only for an interactive session", () => {
-  assert.equal(shouldAsk([], {}, true), true);
-  assert.equal(shouldAsk(["--dangerously-skip-permissions", "corrige le bouton"], {}, true), true);
-  assert.equal(shouldAsk([], {}, false), false, "not a terminal");
+test("only an interactive session can ask or listen", () => {
+  assert.equal(opensSession([], {}, true), true);
+  assert.equal(opensSession(["--dangerously-skip-permissions", "corrige le bouton"], {}, true), true);
+  assert.equal(opensSession([], {}, false), false, "not a terminal");
   for (const args of [["-p", "salut"], ["--print"], ["--version"], ["-h"], ["mcp", "list"], ["update"], ["doctor"]]) {
-    assert.equal(shouldAsk(args, {}, true), false, args.join(" "));
+    assert.equal(opensSession(args, {}, true), false, args.join(" "));
   }
-  assert.equal(shouldAsk([], { MARKSPOT_CHANNEL: "1" }, true), false, "nested call");
+  assert.equal(opensSession([], { MARKSPOT_CHANNEL: "1" }, true), false, "nested call");
+});
+
+test("the folder's wake-up choice decides how claude starts", () => {
+  assert.equal(startFor("ask", false), "ask");
+  assert.equal(startFor("on", false), "channel");
+  assert.equal(startFor("off", false), "plain");
+});
+
+test("when a session already listens to this project here, claude starts without Markspot and without asking", () => {
+  for (const wakeUp of ["ask", "on", "off"] as const) assert.equal(startFor(wakeUp, true), "plain", wakeUp);
 });
 
 test("exit code: claude's own, or 128 + signal", () => {

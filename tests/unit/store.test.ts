@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { LOCAL_SCOPE, STYLE_PROPS, type AnnotationId, type NewAnnotation } from "../../src/core/model.ts";
 import { NewAnnotationSchema } from "../../src/core/schema.ts";
-import { openAgentStore, openHostStore, type StoreConfig } from "../../src/store/store.ts";
+import { openAgentStore, openHostStore, readWakeUp, type StoreConfig } from "../../src/store/store.ts";
 
 const dirs: string[] = [];
 after(async () => {
@@ -226,4 +226,37 @@ test("a source hint is kept through create and get; a malformed one becomes null
   });
   assert.equal((await store.get(bad.id))?.annotation.mark.anchor.sourceHint, null, "a malformed hint never refuses the note");
   assert.ok(!("sourceHint" in (await store.get(old.id))!.annotation.mark.anchor), "an old note reads back without it");
+});
+
+test("wake-up: ask until chosen, then the choice is kept for the whole folder", async () => {
+  const cfg = await config();
+  const store = await openHostStore(cfg);
+  assert.equal(await store.wakeUp(), "ask");
+  assert.equal(await store.setWakeUp("on"), "on");
+  assert.equal(await readWakeUp(cfg.dataDir), "on", "another program reading the same folder");
+  assert.equal(await store.setWakeUp("off"), "off");
+  assert.equal(await readWakeUp(cfg.dataDir), "off");
+  assert.deepEqual(JSON.parse(await readFile(join(cfg.dataDir, "settings.json"), "utf8")), { schemaVersion: 1, wakeUp: "off" });
+  assert.deepEqual(await readdir(join(cfg.dataDir, ".staging")), [], "no temporary file left");
+});
+
+test("wake-up: a missing folder, or a settings file of any other shape, reads as ask", async () => {
+  const cfg = await config();
+  assert.equal(await readWakeUp(join(cfg.dataDir, "absent")), "ask");
+  const file = join(cfg.dataDir, "settings.json");
+  for (const body of [
+    "",
+    "{not json",
+    "null",
+    JSON.stringify({ schemaVersion: 1, wakeUp: "always" }),
+    JSON.stringify({ schemaVersion: 2, wakeUp: "on" }),
+    JSON.stringify({ wakeUp: "on" }),
+    JSON.stringify({ schemaVersion: 1, wakeUp: "on", command: "rm -rf /" }),
+  ]) {
+    await writeFile(file, body);
+    assert.equal(await readWakeUp(cfg.dataDir), "ask", body);
+  }
+  await rm(file);
+  await mkdir(file);
+  assert.equal(await readWakeUp(cfg.dataDir), "ask", "a folder in its place");
 });

@@ -6,6 +6,7 @@
 //   <dataDir>/<scope>/.seq/<n>               numéro de pastille réservé (création exclusive)
 //   <dataDir>/.staging/<pid>-<id>/           note en cours d'écriture, invisible des lecteurs
 //   <dataDir>/.trash/                        notes en cours de suppression
+//   <dataDir>/settings.json                  réglages du dossier (réveil automatique), remplacé par rename
 //
 // resolution.json a deux écrivains possibles, un serveur MCP (Claude) ou l'hôte (la personne
 // règle la note à la main) : il est créé par link exclusif, le premier gagne. Pour le reste,
@@ -33,7 +34,8 @@ import type {
 } from "../core/model.ts";
 import { CAPTURE_KINDS, LOCAL_SCOPE, stateOf } from "../core/model.ts";
 import { consumedDirOf, currentPlatform, pathsFor } from "../core/paths.ts";
-import { AnnotationSchema, ResolutionSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
+import type { WakeUp } from "../core/protocol.ts";
+import { AnnotationSchema, ResolutionSchema, SettingsSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
 import type { PublicListener } from "./dispatch.ts";
 
 export interface StoreConfig {
@@ -108,6 +110,9 @@ export interface HostStore extends ThreadReader {
   listeners(url: string): Promise<PublicListener[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
+  wakeUp(): Promise<WakeUp>;
+  /** Écrit le choix pour tout le dossier, puis rend la valeur relue. */
+  setWakeUp(value: WakeUp): Promise<WakeUp>;
 }
 
 export type SendOutcome =
@@ -368,6 +373,18 @@ async function purgeStale(dir: string): Promise<void> {
   }
 }
 
+const settingsFile = (dataDir: string) => join(dataDir, "settings.json");
+
+/**
+ * Le réveil automatique de ce dossier. Absent, illisible ou d'une autre forme : « ask ».
+ * Le partage peut être écrit par d'autres : au pire, un fichier forgé choisit parmi les trois valeurs.
+ */
+export async function readWakeUp(dataDir: string): Promise<WakeUp> {
+  const raw = await readJson(settingsFile(dataDir)).catch(() => undefined);
+  const settings = SettingsSchema.safeParse(raw);
+  return settings.success ? settings.data.wakeUp : "ask";
+}
+
 export async function openHostStore(config: StoreConfig): Promise<HostStore> {
   const paths = layout(config);
   const linkFile = config.linkFile ?? link;
@@ -480,6 +497,21 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       await renameRetry(tmp, file);
       const now = await read.get(id);
       return now ? { kind: "edited", thread: now } : { kind: "not_found" };
+    },
+
+    wakeUp: () => readWakeUp(config.dataDir),
+
+    async setWakeUp(value) {
+      // Fichier temporaire dans .staging (purgé s'il reste), puis rename : un lecteur voit l'ancien ou le nouveau.
+      const tmp = join(paths.staging, `settings.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+      await writeFile(tmp, JSON.stringify({ schemaVersion: 1, wakeUp: value }, null, 2), { mode: FILE_MODE });
+      try {
+        await renameRetry(tmp, settingsFile(config.dataDir));
+      } catch (error) {
+        await unlink(tmp).catch(() => undefined);
+        throw error;
+      }
+      return readWakeUp(config.dataDir);
     },
 
     watch(onChange) {

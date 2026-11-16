@@ -8,6 +8,7 @@ import * as z from "zod/v4";
 import type { AnnotationId, ScopeId } from "./model.ts";
 import { MAX_STROKES, sanitizeStrokes } from "./drawing.ts";
 import { COMMENT_MAX, STYLE_PROPS } from "./model.ts";
+import { WAKE_UPS } from "./protocol.ts";
 
 export const MAX_ATTRIBUTES = 40;
 export const REPLY_MAX = 4000;
@@ -137,4 +138,9 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
     host: z.string().min(1).max(80).optional(),
   }),
   z.object({ type: z.literal("listeners"), requestId: z.number().int(), url: z.string().max(2000) }),
+  z.object({ type: z.literal("getWakeUp"), requestId: z.number().int() }),
+  z.object({ type: z.literal("setWakeUp"), requestId: z.number().int(), wakeUp: z.enum(WAKE_UPS) }),
 ]);
+
+/** <dataDir>/settings.json. Tout autre contenu se lit comme absent (réveil « ask »). */
+export const SettingsSchema = z.strictObject({ schemaVersion: z.literal(1), wakeUp: z.enum(WAKE_UPS) });

@@ -31,6 +31,8 @@ export interface HostLink {
   onPush(listener: (push: HostPush) => void): void;
   /** Appelé à chaque ouverture réussie du port (après le premier message reçu). */
   onConnected(listener: () => void): void;
+  /** Appelé quand un port ouvert se ferme (programme local arrêté ou retiré). */
+  onDisconnected(listener: () => void): void;
   connect(): void;
 }
 
@@ -43,6 +45,7 @@ export function createHostLink(enabled: boolean): HostLink {
   const pending = new Map<number, Pending>();
   const pushListeners: Array<(push: HostPush) => void> = [];
   const connectedListeners: Array<() => void> = [];
+  const disconnectedListeners: Array<() => void> = [];
 
   function failAll(reason: string): void {
     for (const [id, waiter] of pending) {
@@ -74,9 +77,11 @@ export function createHostLink(enabled: boolean): HostLink {
     opened.onMessage.addListener(onMessage);
     opened.onDisconnect.addListener(() => {
       lastError = chrome.runtime.lastError?.message ?? "host closed the port";
+      const wasReady = ready;
       port = null;
       ready = false;
       failAll(lastError);
+      if (wasReady) for (const listener of disconnectedListeners) listener();
       setTimeout(connect, retryMs);
       retryMs = Math.min(retryMs * 2, RETRY_MAX_MS);
     });
@@ -113,6 +118,7 @@ export function createHostLink(enabled: boolean): HostLink {
     },
     onPush: (listener) => void pushListeners.push(listener),
     onConnected: (listener) => void connectedListeners.push(listener),
+    onDisconnected: (listener) => void disconnectedListeners.push(listener),
     connect,
   };
   return link;

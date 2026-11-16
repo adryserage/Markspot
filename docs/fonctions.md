@@ -98,6 +98,10 @@ Clic droit sur l'icône Markspot, « Exporter les notes », ou le bouton « Expo
 
 L'interface est en anglais par défaut, et aussi en français. Clic droit sur l'icône Markspot, « Langue » (« Language » en anglais) : « Auto (langue du navigateur) » prend le français si le navigateur est en français et l'anglais sinon, « English » et « Français » fixent la langue. Le choix est gardé dans le navigateur. Les pages où le mode annotation est ouvert changent tout de suite : la barre, le menu des notes et la fiche ouverte. Une nouvelle note en cours d'écriture et une modification en cours gardent leur texte. Une note réglée à la main reçoit « Réglée à la main. » ou « Resolved by hand. » selon la langue du moment. La question de `markspot launch` suit la langue du terminal (`LC_ALL`, `LC_MESSAGES` puis `LANG`) : en français si elle commence par `fr`, en anglais sinon.
 
+### Choisir le réveil automatique
+
+Clic droit sur l'icône Markspot, puis « Réveil automatique » (« Automatic wake-up » en anglais), pour choisir ce que fait `claude` quand il lance une session. « Demander à chaque fois » pose la question « Markspot écoute cette session ? » (le choix par défaut). « Toujours » lance Claude avec Markspot, et « Jamais » le lance sans Markspot, les deux sans demander. Le choix est gardé dans le dossier des notes : chaque poste qui utilise ce dossier le suit. Le menu n'apparaît que lorsque l'extension est reliée au programme local : la version d'essai ne l'a pas.
+
 ### La version d'essai
 
 `node build.mjs --trial <dossier>` construit une extension qui marche sans programme local ni Claude Code. Les notes restent dans le navigateur ; l'export permet de les donner à Claude. Le bouton « Envoyer à Claude » n'y est pas. Quand la version complète remplace l'essai dans le même dossier (`node build.mjs --out <dossier>` puis « Recharger » dans `chrome://extensions`), les notes de l'essai partent au programme local. Ne supprime pas l'extension d'essai : ses notes partiraient avec elle.
@@ -121,7 +125,7 @@ Une note qu'il ne peut pas régler reste ouverte, avec la raison.
 Une session reçoit les envois de « Envoyer à Claude » de deux façons, décrites dans le [README](../README.fr.md#envoyer-les-notes-à-claude) :
 
 - le mode écoute : dis « écoute mes annotations ». Claude lance `markspot listen` en tâche de fond, qui n'use aucun jeton pendant l'attente ;
-- le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds `o` (sans réponse en 5 s, c'est non) à « Markspot écoute cette session ? », ou lance `markspot claude`. La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
+- le réveil automatique : après `markspot install`, lance `claude` comme d'habitude et réponds `o` (sans réponse en 5 s, c'est non) à « Markspot écoute cette session ? », ou lance `markspot claude`. Pour ne plus voir la question, voir [Choisir le réveil automatique](#choisir-le-réveil-automatique). La session apparaît d'elle-même dans « Envoyer à » et se réveille à chaque envoi (canaux de Claude Code, aperçu de recherche). Un envoi que Claude n'ouvre pas en 2 minutes revient dans la file.
 
 ### Les outils MCP
 
