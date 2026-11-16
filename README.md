@@ -57,7 +57,7 @@ Then load the `extension/` folder of the repository as above. From a clone, `nod
 8. MCP server: `claude mcp add --scope user markspot`.
 9. Skill: a link from `~/.claude/skills/markspot` to the skill in the package.
 
-You can run `install` again: a step that is already done is not redone. `markspot uninstall` undoes every step, and `markspot doctor` checks each one, then checks that the notes folder is writable.
+You can run `install` again: a step that is already done is not redone. `markspot uninstall` undoes every step, then deletes the notes and Markspot's folders. A notes folder chosen with `--data-dir` stays, since another computer may use it. `markspot doctor` checks each step, then checks that the notes folder is writable.
 
 ### Options
 

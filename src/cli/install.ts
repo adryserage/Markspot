@@ -3,11 +3,11 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, lstat, mkdir, readFile, readlink, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readlink, rm, rmdir, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { currentPlatform, pathsFor } from "../core/paths.ts";
+import { consumedDirOf, currentPlatform, pathsFor, type Paths } from "../core/paths.ts";
 import { HOST_NAME } from "../core/protocol.ts";
 import { BROWSER_IDS, hostTargets, isBrowserId, type BrowserId } from "./browsers.ts";
 import { connectCdp, evaluateInExtension } from "./cdp.ts";
@@ -407,6 +407,37 @@ export async function uninstall(ctx: Context, log: Log): Promise<void> {
     } catch (error) {
       log(`skipped  ${step.name}: ${(error as Error).message}`);
     }
+  }
+  await removeLeftovers(PATHS, ctx.dataDir, log);
+}
+
+/**
+ * Après les étapes : les notes, les envois consommés et les dossiers de Markspot.
+ * Un dossier de notes choisi avec --data-dir peut servir à un autre poste : il reste.
+ * Le dossier de configuration et celui de la clé ne partent que vides, car sous Linux
+ * le dossier de configuration peut garder d'autres fichiers (la clé privée de l'extension).
+ */
+export async function removeLeftovers(paths: Paths, customDataDir: string | undefined, log: Log): Promise<void> {
+  for (const dir of [paths.dataDir, consumedDirOf(paths.keyFile)]) {
+    if (!(await exists(dir))) continue;
+    try {
+      await rm(dir, { recursive: true, force: true });
+      log(`removed  ${dir}`);
+    } catch (error) {
+      log(`skipped  ${dir}: ${(error as Error).message}`);
+    }
+  }
+  for (const dir of [dirname(paths.keyFile), paths.configDir]) {
+    if (!(await exists(dir))) continue;
+    try {
+      await rmdir(dir);
+      log(`removed  ${dir}`);
+    } catch {
+      log(`kept     ${dir}: it holds files that Markspot did not create`);
+    }
+  }
+  if (customDataDir && customDataDir !== paths.dataDir && (await exists(customDataDir))) {
+    log(`kept     ${customDataDir}: notes folder chosen with --data-dir, it may be shared with another computer; delete it by hand`);
   }
 }
 
