@@ -113,7 +113,7 @@ Si Claude attend avec l'outil `markspot_wait_for_annotations` plutôt qu'avec la
 
 ### Réveil automatique (aperçu de recherche)
 
-Après `install`, rien à retenir. Quand tu lances `claude` dans un terminal, Markspot demande :
+Après `install`, rien à retenir. Par défaut, quand tu lances `claude` dans un terminal, Markspot demande :
 
 ```text
 Markspot écoute cette session ? [o/N] (non dans 5 s)
@@ -121,7 +121,9 @@ Markspot écoute cette session ? [o/N] (non dans 5 s)
 
 `o` (ou `y`) lance Claude avec Markspot. Entrée, une autre touche ou rien pendant 5 secondes le lance sans Markspot, et Ctrl+C ne lance rien. La question est en français quand la locale du terminal commence par `fr`, en anglais sinon (« Should Markspot listen to this session? [y/N] (no in 5 s) »).
 
-- La question ne vient pas si une session écoute déjà ce projet (même nom de dossier) sur ce poste. La nouvelle session démarre alors sans Markspot.
+Pour changer ce comportement, clic droit sur l'icône Markspot dans la barre d'outils, puis « Réveil automatique » (« Automatic wake-up » en anglais). « Demander à chaque fois » pose la question ci-dessus. « Toujours » lance Claude avec Markspot, et « Jamais » le lance sans Markspot, les deux sans demander. Le choix est gardé dans le dossier des notes : chaque poste qui utilise ce dossier le suit. Le menu n'apparaît que lorsque l'extension est reliée au programme local.
+
+- Si une session écoute déjà ce projet (même nom de dossier) sur ce poste, la nouvelle session démarre sans Markspot et sans la question, quel que soit le choix.
 - `claude -p`, `claude mcp …`, `claude --version` et les scripts ne sont pas touchés.
 - Tes options passent telles quelles à `claude`, ton mode de permission compris.
 - Pour lancer Claude sans cette fonction : `command claude` (sh, zsh), ou installe avec `--no-shell`.
