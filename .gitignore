@@ -3,4 +3,4 @@ dist/
 extension/dist/
 *.pem
 tests/e2e/artifacts/
-store/
+/store/

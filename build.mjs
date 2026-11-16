@@ -36,9 +36,15 @@ const extensionRoot = trial
 
 const extensionId = extensionIdFromKey(manifest.key);
 
-if (manifest.version !== pkg.version) {
-  throw new Error(`extension/manifest.json version ${manifest.version} differs from package.json ${pkg.version}`);
+// Chrome n'accepte que des chiffres dans « version » : une préversion (0.4.0-beta.0) y garde
+// 0.4.0 et met la version complète dans « version_name ».
+const [release, prerelease] = pkg.version.split("-");
+if (manifest.version !== release || (manifest.version_name ?? manifest.version) !== pkg.version) {
+  throw new Error(
+    `extension/manifest.json version ${manifest.version} (version_name ${manifest.version_name ?? "none"}) does not match package.json ${pkg.version}`,
+  );
 }
+if (store && prerelease) throw new Error(`the Chrome Web Store gets releases only, not ${pkg.version}`);
 
 const define = {
   __MARKSPOT_EXTENSION_ID__: JSON.stringify(extensionId),
