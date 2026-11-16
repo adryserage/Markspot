@@ -6,6 +6,12 @@
   "default_locale": "en",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApDyVvDBmDHqd0gTGvVV6HQx2wm89bu/QbTNdxqP+xCJe/zvD2rltFdOvOWBxuJdXw6Qmi43ZY1+ZJ1dXfHjYsbpw+ZeUSFGiHtx8mzoJl6KeuxqjlVLHSdFzBuILxUP52YSO4UARvPWdwUIqlneW2AqG8OUsjRUSyklPZlPOvPNRBKwfKtpTJ6NLS2SQTtYiYg5+9Mb8C7Qwcf1sndLUeNiCJHdQ/QWHPgj97TH2bT0sKG+Rm8uTpcgsDJbmOpUWDz4pL+olM9gjl3w/R7GdlUI8UvjW7RiGadTrJ9FDAspX/VHzw2O1H9K5Bc37tTgvuIYhz+DanBWFVXAvzDBcawIDAQAB",
   "minimum_chrome_version": "130",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "activeTab",
     "scripting",
@@ -19,7 +25,11 @@
     "type": "module"
   },
   "action": {
-    "default_title": "__MSG_actionTitle__"
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   },
   "commands": {
     "toggle-annotate": {

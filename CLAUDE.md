@@ -16,7 +16,8 @@ Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hô
 - Installer sur ce poste : `node dist/cli.js install --chrome-profile ~/.config/chrome-claude --cdp http://127.0.0.1:9223` (une fois ; les réglages restent dans `~/.config/markspot/config.json`). Ajoute aussi le serveur MCP `markspot` à Claude Code et le skill dans `~/.claude/skills/markspot`.
 - Essai du serveur MCP construit : `npm run smoke`
 - Vérifier l'installation et l'aller-retour extension vers hôte : `node dist/cli.js doctor`
-- Retirer : `node dist/cli.js uninstall`
+- Retirer : `node dist/cli.js uninstall` (supprime aussi les notes, sauf un dossier `--data-dir`)
+- Paquet du Chrome Web Store : `npm run store` (écrit `store/markspot-<version>.zip`, sans `key`). Icônes : `npm run icons`. Capture de la fiche : `node build.mjs --trial <dossier> && node scripts/store-screenshot.ts <dossier>`. Les étapes de publication sont dans `CHROMEWEBSTORE.md`.
 
 ## Structure
 
@@ -26,8 +27,10 @@ Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hô
 - `src/mcp/` : serveur MCP (`server.ts`), rendu des notes pour Claude (`render.ts`) et canal qui réveille la session lancée par `markspot claude` (`channel.ts`).
 - `skill/SKILL.md` : skill « règle mes annotations » (« fix my annotations »), en anglais.
 - `src/cli/` : binaire `markspot` ; `install.ts` contient les étapes `{ satisfied, apply, revert }` d'install, d'uninstall et de doctor ; `browsers.ts` dit où chaque navigateur cherche l'hôte, par système ; `launcher.ts` écrit le lanceur sh ou .bat ; `shell.ts` écrit le bloc `claude` des fichiers de démarrage du shell ; `launch.ts` est ce que ce bloc lance (question, puis claude avec ou sans canal) ; `cdp.ts` parle au port de débogage de Chrome.
-- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée : `overlay.ts`, `menu.ts` pour le menu des notes, `drawing-pad.ts` pour le dessin), `src/export.*` (page d'export ouverte par le menu de l'icône ; format dans `src/core/export.ts`). `src/lang.ts` lit la langue choisie dans le menu de l'icône ; `_locales/` traduit le manifeste.
+- `extension/` : manifeste MV3 (le champ `key` fixe l'identifiant). `src/background.ts` (raccourci, messages, port natif), `src/capture.ts` (deux images), `src/local-store.ts` (stockage dans le navigateur, remplacé par l'hôte à MARK-5), `src/overlay/` (interface dans la page, racine shadow fermée : `overlay.ts`, `menu.ts` pour le menu des notes, `drawing-pad.ts` pour le dessin), `src/export.*` (page d'export ouverte par le menu de l'icône ; format dans `src/core/export.ts`). `src/lang.ts` lit la langue choisie dans le menu de l'icône ; `_locales/` traduit le manifeste. `icons/` : PNG rendus depuis `icons/src/*.svg` par `scripts/icons.mjs`.
 - `tests/unit/` : tests `node:test`, lancés directement en TypeScript. `tests/e2e/` : Playwright `connectOverCDP` sur le Chrome dédié. `tests/fixtures/` : page d'essai et son petit serveur.
+- `scripts/` : outils hors build (icônes, capture et page de démo de la fiche). `store-assets/` : images de la fiche.
+- `CHROMEWEBSTORE.md` : textes, justifications et procédure de publication sur le Chrome Web Store. `PRIVACY.md` (en anglais) : politique de confidentialité liée depuis la fiche, à tenir à jour avec les données que Markspot traite.
 - `docs/conception.md` : conception de la phase 1 (types, flux, choix).
 - `README.md` (en anglais, affiché sur npm) et `README.fr.md` (en français) : même contenu, à tenir à jour ensemble.
 - `docs/features.md` (en anglais) et `docs/fonctions.md` (en français) : guide de chaque fonction, pour les utilisateurs, avec les libellés de l'interface dans sa langue. À tenir à jour ensemble avec chaque fonction ajoutée ou changée.
