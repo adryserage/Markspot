@@ -79,6 +79,8 @@ export async function openDemo(options: {
   assert.ok(address && typeof address !== "string");
   const url = `http://127.0.0.1:${address.port}/${options.lang === "fr" ? "fr" : ""}`;
 
+  // Le LOCALAPPDATA jetable n'isole l'hôte que sous Windows : ailleurs, il écrirait dans les vraies notes.
+  assert.ok(!options.native || process.platform === "win32", "native mode isolates the notes on Windows only: use --trial");
   const profile = await mkdtemp(join(tmpdir(), "markspot-demo-"));
   const notesHome = options.native ? await mkdtemp(join(tmpdir(), "markspot-host-")) : null;
   const hostsBefore = new Set(hostProcesses());
