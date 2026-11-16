@@ -142,7 +142,7 @@ Après `npm install -g markspot`, la commande `markspot` est dans le `PATH`. `in
 - `markspot install` : installe le programme local pour Chrome et Brave, la fonction `claude` du shell, le serveur MCP dans Claude Code, le skill et la clé qui signe les envois. Options : `--browser`, `--chrome-profile`, `--cdp`, `--data-dir`, `--key-file` pour reprendre la clé de l'autre poste, `--no-shell` et `--shell` (voir le [README](../README.fr.md#options)) ;
 - `markspot key` : affiche la clé d'envoi de ce poste, à recopier une fois sur l'autre. Garde-la secrète ;
 - `markspot doctor` : vérifie chaque étape de l'installation, l'accès en écriture au dossier des notes et, avec `--cdp`, l'aller-retour entre l'extension et le programme local ;
-- `markspot uninstall` : défait chaque étape ;
+- `markspot uninstall` : défait chaque étape, puis supprime les notes et les dossiers de Markspot (un dossier de notes choisi avec `--data-dir` reste) ;
 - `markspot listen [--name <projet>] [--url <adresse>] [--timeout <secondes>]` : attend un envoi. Code 0 quand des notes arrivent, 2 après le délai (une heure par défaut) ;
 - `markspot launch [options de claude]` : ce que lance la fonction `claude` ajoutée par `install` (la question, puis claude avec ou sans Markspot) ;
 - `markspot claude [options de claude]` : lance Claude Code avec le canal Markspot, en mode « demande avant chaque commande » sauf si tu choisis un autre mode ;
