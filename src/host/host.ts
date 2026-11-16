@@ -164,6 +164,12 @@ async function handle(
     case "listeners":
       send({ type: "listeners", requestId: message.requestId, listeners: await store.listeners(message.url) });
       return;
+    case "getWakeUp":
+      send({ type: "wakeUp", requestId: message.requestId, wakeUp: await store.wakeUp() });
+      return;
+    case "setWakeUp":
+      send({ type: "wakeUp", requestId: message.requestId, wakeUp: await store.setWakeUp(message.wakeUp) });
+      return;
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;
