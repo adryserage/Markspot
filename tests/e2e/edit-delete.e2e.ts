@@ -9,10 +9,10 @@ import { chromium, type CDPSession, type Page } from "playwright-core";
 import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { EXTENSION_ID } from "./extension-id.ts";
 import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
-const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type FlatNode = { nodeId: number; parentId?: number; nodeName: string; nodeType?: number; nodeValue?: string; attributes?: string[] };

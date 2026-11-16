@@ -10,10 +10,10 @@ import { chromium, type Page } from "playwright-core";
 import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { EXTENSION_ID } from "./extension-id.ts";
 import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
-const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
 const FIXTURE_TITLE = "Page d'essai Markspot";
 const ARTIFACTS = resolve(process.env.MARKSPOT_ARTIFACTS ?? "tests/e2e/artifacts");
 
