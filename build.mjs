@@ -9,12 +9,12 @@
 //                                  manifeste sans « key » (la boutique la refuse)
 // L'identifiant de l'extension est calculé ici à partir de la clé publique du manifeste.
 
-import { createHash } from "node:crypto";
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync } from "node:zlib";
 import { build } from "esbuild";
+import { extensionIdFromKey } from "./src/core/extension-id.ts";
 
 const manifest = JSON.parse(await readFile("extension/manifest.json", "utf8"));
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
@@ -34,12 +34,7 @@ const extensionRoot = trial
       ? resolve(outDir)
       : "extension";
 
-/** Chrome : sha256 de la clé publique DER, 32 premiers chiffres hexadécimaux transposés en a-p. */
-const extensionId = createHash("sha256")
-  .update(Buffer.from(manifest.key, "base64"))
-  .digest("hex")
-  .slice(0, 32)
-  .replace(/[0-9a-f]/g, (c) => String.fromCharCode(97 + parseInt(c, 16)));
+const extensionId = extensionIdFromKey(manifest.key);
 
 if (manifest.version !== pkg.version) {
   throw new Error(`extension/manifest.json version ${manifest.version} differs from package.json ${pkg.version}`);
