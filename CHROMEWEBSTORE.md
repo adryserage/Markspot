@@ -8,7 +8,8 @@ Dernière mise à jour : 2026-11-16, version 0.3.0.
 
 1. `npm run build`, puis `npm run store` : écrit `store/markspot-<version>.zip`, dont le manifeste n'a pas de champ `key` (la boutique le refuse).
 2. `npm run icons` refait les PNG de `extension/icons/` à partir des SVG de `extension/icons/src/`.
-3. `node build.mjs --trial <dossier>` puis `node scripts/store-screenshot.ts <dossier>` refait la capture `store-assets/screenshot-1.png`.
+3. Captures, avec le programme local installé : `node build.mjs --out <dossier local>` puis `node scripts/store-screenshot.ts <dossier local>` (ajoute `en` ou `fr` pour une seule langue). Brave ne charge pas l'extension depuis un lecteur réseau : le dossier doit être sur un disque local.
+4. Vidéos de démo : `node scripts/video/make.ts en`, puis `fr`, avec le programme local installé (environ 2 minutes chacune). Elles sortent dans `store/video/`. Avec `--trial`, la scène de la réponse de Claude devient une carte provisoire.
 
 ## Identifiant de l'extension
 
@@ -64,8 +65,9 @@ Markspot lets the user mark an element on a web page and leave a note with scree
 | Image | Taille | Fichier | État |
 | --- | --- | --- | --- |
 | Icône de la boutique | 128×128 | `extension/icons/icon-128.png` | prête |
-| Capture 1 : la boîte de commentaire sur une page | 1280×800 | `store-assets/screenshot-1.png` | prête |
-| Capture 2 : une note réglée avec la réponse de Claude | 1280×800 | à faire avec le vrai programme local | conseillée |
+| Captures 1 à 5, en anglais : boîte de commentaire avec une flèche, surbrillance au survol, note réglée avec la réponse de Claude, menu des notes, page d'export | 1280×800 | `store-assets/screenshot-1.png` à `screenshot-5.png` | prêtes |
+| Captures 1 à 5, en français (fiche en français) | 1280×800 | `store-assets/fr/screenshot-1.png` à `screenshot-5.png` | prêtes |
+| Vidéo de démo, en anglais (vidéo internationale) et en français (vidéo localisée) | 1920×1080, 44,5 s | `store/video/markspot-demo-en.mp4` et `markspot-demo-fr.mp4`, à mettre sur YouTube | prêtes |
 | Petite vignette promotionnelle | 440×280 | à faire | conseillée |
 
 ## Justification des permissions
