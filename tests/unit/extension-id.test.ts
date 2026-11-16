@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extensionIdFromKey } from "../../src/core/extension-id.ts";
+import { extensionIdFromKey } from "../../src/cli/extension-id.ts";
 
 test("the extension id matches the one Chrome gave for a known public key", () => {
   // Clé du manifeste jusqu'à la 0.2.0 ; Chrome l'a chargée sous cet identifiant.

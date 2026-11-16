@@ -37,7 +37,7 @@ Outil open source d'annotation visuelle pour Claude Code : extension Chrome, hô
 
 ## Règles du projet
 
-- L'identifiant de l'extension se calcule dans `build.mjs` à partir de `extension/manifest.json`. Ne le recopie nulle part ailleurs. La clé privée reste hors du dépôt (`~/.config/markspot/extension-key.pem`).
+- Le champ `key` de `extension/manifest.json` est la clé publique de l'élément du Chrome Web Store (identifiant `okaabbekcogbhighojhlcbmdohahonie`) : ne la change pas. L'identifiant se calcule avec `extensionIdFromKey` (`src/cli/extension-id.ts`), que `build.mjs` et les essais e2e appellent. Ne le recopie nulle part ailleurs.
 - La version de `extension/manifest.json` doit être celle de `package.json` : le build échoue sinon.
 - Versions exactes dans `package.json`, sans `^`.
 - Imports relatifs avec l'extension `.ts` (Node lance les tests sans compilation).
