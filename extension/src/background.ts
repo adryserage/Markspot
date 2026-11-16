@@ -493,9 +493,9 @@ async function openExportPage(nextTo?: chrome.tabs.Tab): Promise<void> {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === EXPORT_MENU) await openExportPage(tab);
+  if (info.menuItemId === EXPORT_MENU) return openExportPage(tab);
   const wake = WAKE_ITEMS.find((i) => i.id === info.menuItemId);
-  if (wake) await chooseWakeUp(wake.choice);
+  if (wake) return chooseWakeUp(wake.choice);
   const item = LANG_ITEMS.find((i) => i.id === info.menuItemId);
   if (!item) return;
   await ready;
