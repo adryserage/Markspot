@@ -13,10 +13,10 @@ import { connectCdp, evaluateInExtension } from "../../src/cli/cdp.ts";
 import { liveListeners } from "../../src/store/dispatch.ts";
 import { loadConfig, openAgentStore } from "../../src/store/store.ts";
 import { serveFixtures } from "../fixtures/serve.ts";
+import { EXTENSION_ID } from "./extension-id.ts";
 import { useFrench } from "./french.ts";
 
 const CDP_URL = process.env.MARKSPOT_CDP ?? "http://127.0.0.1:9223";
-const EXTENSION_ID = "alimncmfokmnolijpmaikdbjhgbcblle";
 const PROJECT = `essai-reel-${Date.now().toString(36)}`;
 const ARTIFACTS = resolve(process.env.MARKSPOT_ARTIFACTS ?? "tests/e2e/artifacts");
 const LAUNCHER = join(process.env.HOME ?? "", ".local/share/markspot/bin/markspot");
