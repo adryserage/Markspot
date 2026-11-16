@@ -23,6 +23,7 @@
     "dist/",
     "extension/manifest.json",
     "extension/_locales/",
+    "extension/icons/*.png",
     "extension/dist/",
     "skill/",
     "NOTICE"
@@ -33,6 +34,8 @@
   "scripts": {
     "prepublishOnly": "npm run typecheck && npm test && npm run build",
     "build": "node build.mjs",
+    "store": "node build.mjs --store",
+    "icons": "node scripts/icons.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/",
     "smoke": "node tests/smoke-mcp.ts && node tests/smoke-listen.ts",

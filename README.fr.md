@@ -57,7 +57,7 @@ Charge ensuite le dossier `extension/` du dépôt comme plus haut. Depuis un clo
 8. Le serveur MCP : `claude mcp add --scope user markspot`.
 9. Le skill : un lien de `~/.claude/skills/markspot` vers le skill du paquet.
 
-On peut relancer `install` : une étape déjà faite n'est pas refaite. `markspot uninstall` défait chaque étape, et `markspot doctor` vérifie chacune, puis vérifie qu'on peut écrire dans le dossier des notes.
+On peut relancer `install` : une étape déjà faite n'est pas refaite. `markspot uninstall` défait chaque étape, puis supprime les notes et les dossiers de Markspot. Un dossier de notes choisi avec `--data-dir` reste, car un autre poste peut s'en servir. `markspot doctor` vérifie chaque étape, puis vérifie qu'on peut écrire dans le dossier des notes.
 
 ### Options
 
