@@ -2,7 +2,7 @@
 
 Tout ce qu'il faut remplir dans le tableau de bord développeur du Chrome Web Store pour Markspot. Les textes à coller sont en anglais, la langue principale de la fiche ; ils sont dans des blocs de code pour garder leurs retours à la ligne (la boutique n'affiche pas le Markdown).
 
-Dernière mise à jour : 2026-11-16, version 0.2.0.
+Dernière mise à jour : 2026-11-16, version 0.3.0.
 
 ## Paquet
 
@@ -10,15 +10,11 @@ Dernière mise à jour : 2026-11-16, version 0.2.0.
 2. `npm run icons` refait les PNG de `extension/icons/` à partir des SVG de `extension/icons/src/`.
 3. `node build.mjs --trial <dossier>` puis `node scripts/store-screenshot.ts <dossier>` refait la capture `store-assets/screenshot-1.png`.
 
-## Identifiant de l'extension (avant toute publication)
+## Identifiant de l'extension
 
-La boutique donne son propre identifiant à l'extension. Le programme local (`markspot host`) n'accepte que l'identifiant calculé depuis le champ `key` de `extension/manifest.json`. Tant que les deux diffèrent, l'extension de la boutique ne peut pas parler au programme local et Markspot ne marche chez personne.
+L'identifiant est `okaabbekcogbhighojhlcbmdohahonie`, celui que la boutique a donné à l'élément. Le champ `key` de `extension/manifest.json` est la clé publique affichée dans l'onglet « Package » de l'élément (« View public key »). Ne la change pas : le programme local (`markspot host`) n'accepte que l'identifiant calculé depuis cette clé, et `npm run build` l'affiche à chaque build.
 
-1. Envoie `store/markspot-<version>.zip` comme nouvel élément, sans le soumettre à l'examen.
-2. Dans l'onglet « Package » du brouillon, ouvre « View public key » et copie la clé, sans les lignes `-----BEGIN/END PUBLIC KEY-----`.
-3. Remplace la valeur de `key` dans `extension/manifest.json` par cette clé, monte la version (`package.json` et le manifeste), puis `npm run build` : la ligne `extension id` doit afficher l'identifiant du brouillon.
-4. `npm run store`, envoie le nouveau ZIP dans le brouillon, publie la même version sur npm, puis soumets à l'examen.
-5. Sur chaque poste déjà installé : `markspot uninstall`, puis `markspot install` avec la nouvelle version, et recharge l'extension.
+Mettre à jour un poste : `npm install -g markspot@<version>` puis `markspot install`. `install` réécrit chaque étape qui a changé, dont la déclaration du programme local. N'utilise pas `markspot uninstall` pour une mise à jour : il supprime aussi les notes.
 
 ## Fiche
 
