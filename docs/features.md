@@ -100,6 +100,10 @@ The interface is in English by default, and also in French. Right-click the Mark
 
 The question that `markspot launch` asks follows the terminal language (`LC_ALL`, `LC_MESSAGES`, then `LANG`): French when it starts with `fr`, English otherwise.
 
+### Choosing the automatic wake-up
+
+Right-click the Markspot icon, then "Automatic wake-up", to choose what `claude` does when it starts a session. "Ask each time" asks "Should Markspot listen to this session?" (the default). "Always" starts Claude with Markspot, and "Never" starts it without Markspot, both without asking. The choice is saved in the notes folder, so every computer that uses that folder follows it. The menu shows only while the extension is connected to the local program, so the trial version does not have it.
+
 ### The trial version
 
 `node build.mjs --trial <folder>` builds an extension that works without the local program or Claude Code. Notes stay in the browser, and the export lets you hand them to Claude. The "Send to Claude" button is not there. When the full version replaces the trial in the same folder (`node build.mjs --out <folder>`, then "Reload" in `chrome://extensions`), the trial's notes go to the local program. Do not remove the trial extension: its notes would go with it.
@@ -123,7 +127,7 @@ A note it cannot fix stays open, with the reason.
 A session receives "Send to Claude" dispatches in two ways, described in the [README](../README.md#sending-notes-to-claude):
 
 - listen mode: say "listen to my annotations". Claude runs `markspot listen` as a background command, which uses no tokens while it waits;
-- automatic wake-up: after `markspot install`, start `claude` as usual and answer `y` (no answer within 5 s means no) to "Should Markspot listen to this session?", or run `markspot claude`. The session shows in "Send to" on its own and wakes up at each dispatch (Claude Code channels, research preview). A dispatch that Claude does not open within 2 minutes goes back in the queue.
+- automatic wake-up: after `markspot install`, start `claude` as usual and answer `y` (no answer within 5 s means no) to "Should Markspot listen to this session?", or run `markspot claude`. To skip the question, see [Choosing the automatic wake-up](#choosing-the-automatic-wake-up). The session shows in "Send to" on its own and wakes up at each dispatch (Claude Code channels, research preview). A dispatch that Claude does not open within 2 minutes goes back in the queue.
 
 ### MCP tools
 
