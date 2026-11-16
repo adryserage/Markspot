@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Markspot",
-  "version": "0.3.0",
+  "version": "0.4.0",
+  "version_name": "0.4.0-beta.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwLfFbGgDfKGS+iSG/m0BfQK7NBest9Ll0pUwMO+b3cu4WCcj/596MANORp8jS1UaMcsmmsdr4UEN5kIqQzSW0yFbP6Q+rdGvkjd87AtjJtKYrBJ/iukTb4O3X/ZEzEz/qCdTgSD4kIL3GzpHPNIET2aji9MmAwZjoj+Nht9tbeSU3SQCmXX9dSbNYuO2GluLU0NXoD/w5xMKtSm0zIH9j3kpBPrw9GFgbwfQPQVxPz1nsM6p9P7DCNMx8Bnp3pSGMohlgd4mOSs8Tb8ltO1CrwEfwRpjpfgM5GhNyVUqGXN3FsMS18GpG1+W6caPSdMv6YkxOj+n9kFAHjFXL2zA5QIDAQAB",
