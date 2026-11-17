@@ -2,7 +2,7 @@
 
 Tout ce qu'il faut remplir dans le tableau de bord développeur du Chrome Web Store pour Markspot. Les textes à coller sont en anglais, la langue principale de la fiche ; ils sont dans des blocs de code pour garder leurs retours à la ligne (la boutique n'affiche pas le Markdown).
 
-Dernière mise à jour : 2026-11-16, version 0.3.0.
+Dernière mise à jour : 2026-11-16, version 0.3.0, publiée sur le Chrome Web Store : https://chromewebstore.google.com/detail/okaabbekcogbhighojhlcbmdohahonie
 
 ## Paquet
 
