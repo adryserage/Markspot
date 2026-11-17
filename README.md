@@ -63,7 +63,7 @@ Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" an
 
 1. Settings: writes `config.json` with the options you passed.
 2. Dispatch key: creates the key that signs "Send to Claude" dispatches (see [Two machines, one notes folder](#two-machines-one-notes-folder)). It never replaces an existing key.
-3. Host launcher: a small script that starts the local program with the full path of Node, because a browser started from a menu does not always have your shell's `PATH`.
+3. Host launcher: a small script that starts the local program with the full path of Node, because a browser started from a menu does not always have your shell's `PATH`. When Node comes from mise, the path is the folder of its major version (`…/mise/installs/node/26/`), which follows Node updates; after a new major version, run `install` again.
 4. Markspot command: a second launcher, `markspot`, that Claude Code sessions use to run `markspot listen`.
 5. Host manifest for each browser: on Linux and macOS, a file in the browser's `NativeMessagingHosts` folder (a browser that is not installed is skipped); on Windows, a registry key that Chrome and Brave share.
 6. Extension: with `--cdp`, `install` loads the extension in that Chrome itself. Otherwise this step is the "to do" line above, and it counts as done once the extension has connected to the local program.

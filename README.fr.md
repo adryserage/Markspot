@@ -63,7 +63,7 @@ Ensuite, dans `chrome://extensions`, active le mode développeur, clique sur « 
 
 1. Le réglage : il écrit `config.json` avec les options passées.
 2. La clé d'envoi : il crée la clé qui signe les envois « Envoyer à Claude » (voir [Deux postes, un seul dossier de notes](#deux-postes-un-seul-dossier-de-notes)). Il ne remplace jamais une clé déjà là.
-3. Le lanceur du programme local : un petit script qui lance le programme avec le chemin complet de Node, car un navigateur lancé depuis un menu n'a pas toujours le `PATH` du shell.
+3. Le lanceur du programme local : un petit script qui lance le programme avec le chemin complet de Node, car un navigateur lancé depuis un menu n'a pas toujours le `PATH` du shell. Quand Node vient de mise, ce chemin est le dossier de sa version majeure (`…/mise/installs/node/26/`), qui suit les mises à jour de Node ; après une nouvelle version majeure, relance `install`.
 4. La commande markspot : un second lanceur, `markspot`, que les sessions Claude Code utilisent pour `markspot listen`.
 5. La déclaration du programme local pour chaque navigateur : sous Linux et macOS, un fichier dans le dossier `NativeMessagingHosts` du navigateur (un navigateur absent est sauté) ; sous Windows, une clé de registre que Chrome et Brave partagent.
 6. L'extension : avec `--cdp`, `install` la charge lui-même dans ce Chrome. Sinon, cette étape est la ligne « to do » ci-dessus, et elle compte comme faite dès que l'extension s'est connectée au programme local.

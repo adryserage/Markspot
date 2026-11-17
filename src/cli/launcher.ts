@@ -10,6 +10,20 @@ export interface Launcher {
   mode: number;
 }
 
+/**
+ * Le node à graver dans les lanceurs. Node installé par mise vit dans …/mise/installs/node/<x.y.z>/,
+ * et mise tient à jour un dossier par version majeure (…/node/26) : ce chemin suit les mises à jour
+ * de la majeure sans dépendre du dossier courant, contrairement au raccourci (shim) de mise, qui
+ * prendrait le Node demandé par le projet où tourne `markspot listen`. Pur : exists est passé.
+ */
+export function stableNodePath(execPath: string, exists: (path: string) => boolean): string {
+  const match = /^(.*[\\/]mise[\\/]installs[\\/]node[\\/])(\d+)\.\d+\.\d+([\\/].+)$/.exec(execPath);
+  if (!match) return execPath;
+  const [, installs, major, rest] = match;
+  const majorPath = `${installs}${major}${rest}`;
+  return exists(majorPath) ? majorPath : execPath;
+}
+
 /** Guillemets simples pour sh : seule l'apostrophe demande un traitement. */
 export const shQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
