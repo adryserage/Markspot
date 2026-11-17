@@ -4,11 +4,13 @@ Français : [README.fr.md](README.fr.md)
 
 Markspot lets you mark a spot on a web page and leave a note about it. Claude Code reads the note, fixes the code, checks the result in the browser and answers on the page, next to your note.
 
+![Mark a button, write a note, then Claude answers on the page](docs/demo.gif)
+
 Every feature is described in the [feature guide](docs/features.md).
 
 ## Status
 
-Version 0.1. Markspot works with Chrome and Brave on Linux and Windows. The install on macOS has not been tried on a real machine yet.
+Markspot works with Chrome and Brave on Linux and Windows. The install on macOS has not been tried on a real machine yet.
 
 The whole loop works: you annotate in the browser, Claude Code reads the note with its two screenshots, fixes the code, then resolves the note, and the pin on the page turns to "Resolved" with Claude's reply.
 
@@ -21,13 +23,12 @@ npm install -g markspot
 markspot install
 ```
 
-The extension is under review on the Chrome Web Store. Until it is published there, load it from the package. `install` cannot load the extension in your browser by itself, so it ends with a "to do" line that names the extension folder. That folder is `extension` inside the installed package, which is `$(npm root -g)/markspot/extension`. Load it once:
+`install` cannot add the extension to your browser by itself, so it ends with a "to do" line:
 
-1. Open `chrome://extensions` (or `brave://extensions`) and turn on developer mode.
-2. Click "Load unpacked" and choose that folder.
-3. Open a new terminal, so that your shell picks up the `claude` function that `install` added.
-4. Open a web page and press Alt+C. The extension connects to the local program.
-5. Run `markspot doctor` to check every step.
+1. Add Markspot from the [Chrome Web Store](https://chromewebstore.google.com/detail/okaabbekcogbhighojhlcbmdohahonie). Brave installs it from the same page.
+2. Open a new terminal, so that your shell picks up the `claude` function that `install` added.
+3. Open a web page and press Alt+C. The extension connects to the local program.
+4. Run `markspot doctor` to check every step.
 
 If Alt+C does nothing, set the shortcut in `chrome://extensions/shortcuts`.
 
@@ -38,9 +39,11 @@ npm install -g markspot
 markspot install
 ```
 
-`install` redoes only the steps that changed. Then click the reload button of Markspot in `chrome://extensions`. Do not use `markspot uninstall` to update: it also deletes your notes.
+`install` redoes only the steps that changed. The Chrome Web Store updates the extension on its own. Do not use `markspot uninstall` to update: it also deletes your notes.
 
-Version 0.3.0 gives the extension a new id, the one it has on the Chrome Web Store. When you update from 0.2.0 or older, remove the old Markspot extension in `chrome://extensions`, then load the `extension` folder again.
+If you loaded the extension with "Load unpacked" before it was on the Chrome Web Store, remove that copy in `chrome://extensions`, then add Markspot from the store. Your notes stay in place.
+
+A beta (`npm install -g markspot@next`) can need a newer extension than the store has. Its extension is in the package: in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose `$(npm root -g)/markspot/extension`.
 
 ### From source
 
@@ -52,7 +55,7 @@ npm run build
 node dist/cli.js install
 ```
 
-Then load the `extension/` folder of the repository as above. From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
+Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose the `extension/` folder of the repository. Remove the store copy first: both have the same id. From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
 
 ### What install does
 

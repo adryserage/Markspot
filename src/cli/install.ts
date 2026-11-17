@@ -318,8 +318,8 @@ function browserSteps(ctx: Context): InstallStep[] {
       apply: async () => {},
       revert: async () => {},
       manual:
-        `open chrome://extensions (or brave://extensions), turn on developer mode, ` +
-        `click "Load unpacked" and choose ${ctx.extensionDir}`,
+        `add Markspot from the Chrome Web Store: https://chromewebstore.google.com/detail/${ctx.extensionId} ` +
+        `(for a beta from npm: in chrome://extensions, turn on developer mode, click "Load unpacked" and choose ${ctx.extensionDir})`,
     });
   }
   return steps;

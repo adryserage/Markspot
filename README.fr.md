@@ -4,11 +4,13 @@ English: [README.md](README.md)
 
 Tu marques un endroit d'une page web et tu y laisses une note. Claude Code lit la note, corrige le code, vérifie le résultat dans le navigateur et répond sur la page, à côté de ta note.
 
+![Marquer un bouton, écrire une note, puis Claude répond sur la page](docs/demo.fr.gif)
+
 Chaque fonction est décrite dans le [guide des fonctions](docs/fonctions.md).
 
 ## État
 
-Version 0.1. Markspot marche avec Chrome et Brave sous Linux et sous Windows. L'installation sous macOS n'a pas encore été essayée sur une vraie machine.
+Markspot marche avec Chrome et Brave sous Linux et sous Windows. L'installation sous macOS n'a pas encore été essayée sur une vraie machine.
 
 La boucle complète marche : tu annotes dans le navigateur, Claude Code lit la note avec ses deux images, corrige le code, puis résout la note, et la pastille passe à « Réglée » avec la réponse de Claude.
 
@@ -21,13 +23,12 @@ npm install -g markspot
 markspot install
 ```
 
-L'extension est en cours d'examen sur le Chrome Web Store. D'ici sa publication, charge-la depuis le paquet. `install` ne peut pas charger l'extension dans le navigateur tout seul : il finit par une ligne « to do » qui donne le dossier de l'extension. Ce dossier est `extension`, dans le paquet installé, soit `$(npm root -g)/markspot/extension`. Charge-le une fois :
+`install` ne peut pas ajouter l'extension au navigateur tout seul : il finit par une ligne « to do » :
 
-1. Ouvre `chrome://extensions` (ou `brave://extensions`) et active le mode développeur.
-2. Clique sur « Charger l'extension non empaquetée » et choisis ce dossier.
-3. Ouvre un nouveau terminal, pour que ton shell prenne la fonction `claude` ajoutée par `install`.
-4. Ouvre une page web et appuie sur Alt+C : l'extension se connecte au programme local.
-5. Lance `markspot doctor` pour vérifier chaque étape.
+1. Ajoute Markspot depuis le [Chrome Web Store](https://chromewebstore.google.com/detail/okaabbekcogbhighojhlcbmdohahonie). Brave l'installe depuis la même page.
+2. Ouvre un nouveau terminal, pour que ton shell prenne la fonction `claude` ajoutée par `install`.
+3. Ouvre une page web et appuie sur Alt+C : l'extension se connecte au programme local.
+4. Lance `markspot doctor` pour vérifier chaque étape.
 
 Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
 
@@ -38,9 +39,11 @@ npm install -g markspot
 markspot install
 ```
 
-`install` refait seulement les étapes qui ont changé. Clique ensuite sur le bouton de rechargement de Markspot dans `chrome://extensions`. N'utilise pas `markspot uninstall` pour mettre à jour : il supprime aussi tes notes.
+`install` refait seulement les étapes qui ont changé. Le Chrome Web Store met l'extension à jour tout seul. N'utilise pas `markspot uninstall` pour mettre à jour : il supprime aussi tes notes.
 
-La version 0.3.0 donne à l'extension un nouvel identifiant, celui qu'elle a sur le Chrome Web Store. Si tu mets à jour depuis la 0.2.0 ou plus ancienne, retire l'ancienne extension Markspot dans `chrome://extensions`, puis charge de nouveau le dossier `extension`.
+Si tu as chargé l'extension avec « Charger l'extension non empaquetée » avant sa publication sur le Chrome Web Store, retire cette copie dans `chrome://extensions`, puis ajoute Markspot depuis la boutique. Tes notes restent en place.
+
+Une beta (`npm install -g markspot@next`) peut demander une extension plus récente que celle de la boutique. Son extension est dans le paquet : dans `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis `$(npm root -g)/markspot/extension`.
 
 ### Depuis les sources
 
@@ -52,7 +55,7 @@ npm run build
 node dist/cli.js install
 ```
 
-Charge ensuite le dossier `extension/` du dépôt comme plus haut. Depuis un clone, `node dist/cli.js` remplace `markspot` dans toutes les commandes de cette page.
+Ensuite, dans `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Retire d'abord la copie de la boutique : les deux ont le même identifiant. Depuis un clone, `node dist/cli.js` remplace `markspot` dans toutes les commandes de cette page.
 
 ### Ce que fait install
 
