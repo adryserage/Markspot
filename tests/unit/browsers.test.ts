@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hostTargets } from "../../src/cli/browsers.ts";
-import { launcherFor } from "../../src/cli/launcher.ts";
+import { launcherFor, stableNodePath } from "../../src/cli/launcher.ts";
 import { pathsFor } from "../../src/core/paths.ts";
 
 test("Windows: Chrome and Brave share one registry key", () => {
@@ -55,4 +55,21 @@ test("the cli launcher runs markspot itself, without the host subcommand", () =>
 test("sh launcher: spaces, dollar and apostrophe stay literal", () => {
   const sh = launcherFor("darwin", "/opt/my node/bin/node", "/Users/l'ada/$HOME/cli.js");
   assert.equal(sh.content, `#!/bin/sh\nexec '/opt/my node/bin/node' '/Users/l'\\''ada/$HOME/cli.js' host "$@"\n`);
+});
+
+test("node from mise: the launchers get the major version folder, which follows Node updates", () => {
+  const linux = "/home/me/.local/share/mise/installs/node/26.11.1/bin/node";
+  const linuxMajor = "/home/me/.local/share/mise/installs/node/26/bin/node";
+  assert.equal(stableNodePath(linux, (p) => p === linuxMajor), linuxMajor);
+  const windows = String.raw`C:\Users\me\AppData\Local\mise\installs\node\26.13.1\node.exe`;
+  const windowsMajor = String.raw`C:\Users\me\AppData\Local\mise\installs\node\26\node.exe`;
+  assert.equal(stableNodePath(windows, (p) => p === windowsMajor), windowsMajor);
+});
+
+test("node path stays as is without a mise major folder, or outside mise", () => {
+  const linux = "/home/me/.local/share/mise/installs/node/26.11.1/bin/node";
+  assert.equal(stableNodePath(linux, () => false), linux);
+  assert.equal(stableNodePath("/usr/bin/node", () => true), "/usr/bin/node");
+  const programFiles = String.raw`C:\Program Files\nodejs\node.exe`;
+  assert.equal(stableNodePath(programFiles, () => true), programFiles);
 });

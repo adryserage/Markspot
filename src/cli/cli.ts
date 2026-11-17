@@ -1,5 +1,6 @@
 // Point d'entrée du binaire `markspot`.
 
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import { runHost } from "../host/host.ts";
 import { loadConfig, openAgentStore, openHostStore } from "../store/store.ts";
 import { BROWSER_IDS, isBrowserId } from "./browsers.ts";
 import { CLI_LAUNCHER, DEFAULT_SETTINGS, HOST_STATUS_FILE, doctor, install, readSettings, uninstall, type Context } from "./install.ts";
+import { stableNodePath } from "./launcher.ts";
 
 /** Trace de la dernière connexion de l'extension, lue par doctor quand il n'a pas de port de débogage. */
 async function writeHostStatus(): Promise<void> {
@@ -86,7 +88,7 @@ async function context(flags: Flags): Promise<Context> {
     extensionId: EXTENSION_ID,
     extensionDir: join(dirname(cliPath), "..", "extension"),
     cliPath,
-    nodePath: process.execPath,
+    nodePath: stableNodePath(process.execPath, existsSync),
     skillDir: join(dirname(cliPath), "..", "skill"),
   };
 }
