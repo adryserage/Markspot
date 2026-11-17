@@ -67,7 +67,7 @@ Markspot lets the user mark an element on a web page and leave a note with scree
 | Icône de la boutique | 128×128 | `extension/icons/icon-128.png` | prête |
 | Captures 1 à 5, en anglais : boîte de commentaire avec une flèche, surbrillance au survol, note réglée avec la réponse de Claude, menu des notes, page d'export | 1280×800 | `store-assets/screenshot-1.png` à `screenshot-5.png` | prêtes |
 | Captures 1 à 5, en français (fiche en français) | 1280×800 | `store-assets/fr/screenshot-1.png` à `screenshot-5.png` | prêtes |
-| Vidéo de démo, en anglais (vidéo internationale) et en français (vidéo localisée) | 1920×1080, 44,5 s | `store/video/markspot-demo-en.mp4` et `markspot-demo-fr.mp4`, à mettre sur YouTube | prêtes |
+| Vidéo de démo, en anglais (vidéo internationale) et en français (vidéo localisée) | 1920×1080, 44,5 s | `store/video/markspot-demo-en.mp4` et `markspot-demo-fr.mp4`, en ligne : anglaise https://www.youtube.com/watch?v=Qc0xEFUuMCg, française https://www.youtube.com/watch?v=bbS5UQcl3ec | en ligne |
 | Petite vignette promotionnelle | 440×280 | à faire | conseillée |
 
 ## Justification des permissions

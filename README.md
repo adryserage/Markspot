@@ -2,7 +2,9 @@
 
 Markspot is a browser extension for Claude Code. You click an element on a web page (or drag over an area) and write what is wrong with it. Claude Code reads the note and its two screenshots, finds the source file, fixes it, checks the result in the browser and answers on the page, in the pin next to your note.
 
-![Mark a button, write a note, then Claude answers on the page](https://raw.githubusercontent.com/adryserage/Markspot/main/docs/demo.gif)
+[![Mark a button, write a note, then Claude answers on the page](https://raw.githubusercontent.com/adryserage/Markspot/main/docs/demo.gif)](https://www.youtube.com/watch?v=Qc0xEFUuMCg)
+
+The full demo (45 s) is on [YouTube](https://www.youtube.com/watch?v=Qc0xEFUuMCg).
 
 Français : [README.fr.md](README.fr.md). Every feature is described in the [feature guide](docs/features.md).
 
