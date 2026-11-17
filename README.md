@@ -4,7 +4,7 @@ Français : [README.fr.md](README.fr.md)
 
 Markspot lets you mark a spot on a web page and leave a note about it. Claude Code reads the note, fixes the code, checks the result in the browser and answers on the page, next to your note.
 
-![Mark a button, write a note, then Claude answers on the page](docs/demo.gif)
+![Mark a button, write a note, then Claude answers on the page](https://raw.githubusercontent.com/adryserage/Markspot/main/docs/demo.gif)
 
 Every feature is described in the [feature guide](docs/features.md).
 

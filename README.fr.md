@@ -4,7 +4,7 @@ English: [README.md](README.md)
 
 Tu marques un endroit d'une page web et tu y laisses une note. Claude Code lit la note, corrige le code, vérifie le résultat dans le navigateur et répond sur la page, à côté de ta note.
 
-![Marquer un bouton, écrire une note, puis Claude répond sur la page](docs/demo.fr.gif)
+![Marquer un bouton, écrire une note, puis Claude répond sur la page](https://raw.githubusercontent.com/adryserage/Markspot/main/docs/demo.fr.gif)
 
 Chaque fonction est décrite dans le [guide des fonctions](docs/fonctions.md).
 
