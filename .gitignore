@@ -4,3 +4,5 @@ extension/dist/
 *.pem
 tests/e2e/artifacts/
 /store/
+.impeccable/
+/CLAUDE.md
