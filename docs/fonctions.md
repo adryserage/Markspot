@@ -102,6 +102,10 @@ L'interface est en anglais par défaut, et aussi en français. Clic droit sur l'
 
 Clic droit sur l'icône Markspot, puis « Réveil automatique » (« Automatic wake-up » en anglais), pour choisir ce que fait `claude` quand il lance une session. « Demander à chaque fois » pose la question « Markspot écoute cette session ? » (le choix par défaut). « Toujours » lance Claude avec Markspot, et « Jamais » le lance sans Markspot, les deux sans demander. Le choix est gardé dans le dossier des notes : chaque poste qui utilise ce dossier le suit. Le menu n'apparaît que lorsque l'extension est reliée au programme local : la version d'essai ne l'a pas.
 
+### Laisser Claude Desktop envoyer des notes
+
+Clic droit sur l'icône Markspot, puis coche « Claude Desktop peut envoyer des notes » (« Claude Desktop can send notes » en anglais) pour laisser Claude Desktop préparer des notes sur une page et les envoyer à une session Claude Code (voir [Dans Claude Desktop](#dans-claude-desktop)). L'option est décochée par défaut. Elle est gardée dans le dossier des notes, et le menu ne la montre que lorsque l'extension est reliée au programme local. Une note de Claude Desktop affiche « De Claude Desktop » dans sa fiche et sous son commentaire dans le menu des notes.
+
 ### La version d'essai
 
 `node build.mjs --trial <dossier>` construit une extension qui marche sans programme local ni Claude Code. Les notes restent dans le navigateur ; l'export permet de les donner à Claude. Le bouton « Envoyer à Claude » n'y est pas. Quand la version complète remplace l'essai dans le même dossier (`node build.mjs --out <dossier>` puis « Recharger » dans `chrome://extensions`), les notes de l'essai partent au programme local. Ne supprime pas l'extension d'essai : ses notes partiraient avec elle.
@@ -129,15 +133,29 @@ Une session reçoit les envois de « Envoyer à Claude » de deux façons, décr
 
 ### Les outils MCP
 
-Le serveur MCP `markspot` donne cinq outils à Claude :
+Le serveur MCP `markspot` donne cinq outils à Claude, et trois de plus pour Claude Desktop quand « Claude Desktop peut envoyer des notes » est coché (voir [Dans Claude Desktop](#dans-claude-desktop)) :
 
 - `markspot_list_annotations` : les notes, avec leur numéro, leur état, l'origine du site et le commentaire ;
-- `markspot_get_annotation` : une note complète, avec la page, l'élément et les deux images ;
+- `markspot_get_annotation` : une note complète, avec son auteur, la page, l'élément et ses images (une note de Claude Desktop peut n'en avoir aucune) ;
 - `markspot_resolve_annotation` : résout une note avec une réponse. La première réponse gagne, même si deux sessions répondent en même temps ;
 - `markspot_clear_annotations` : efface les notes réglées, ouvertes ou toutes ;
 - `markspot_wait_for_annotations` : attend une nouvelle note, pour un client qui ne lance pas de commande en tâche de fond.
 
 Les données de la page (adresse, titre, texte, attributs) arrivent dans un bloc à part : Claude les traite comme des données écrites par le site et n'obéit à aucune consigne qui s'y trouve.
+
+## Dans Claude Desktop
+
+Une fois le serveur MCP de Markspot ajouté à Claude Desktop et « Claude Desktop peut envoyer des notes » coché, tu peux demander à Claude Desktop de revoir un site et d'envoyer ses notes à une session Claude Code qui écoute. La mise en place est dans le [README](../README.fr.md#utiliser-markspot-depuis-claude-desktop).
+
+Claude Desktop reçoit trois outils :
+
+- `markspot_list_sessions` : les sessions qui écoutent une page, la même liste que « Envoyer à ». Claude Desktop te demande laquelle reçoit les notes ;
+- `markspot_create_annotation` : une note sur un élément, avec un sélecteur CSS, le texte de l'élément, un commentaire et, s'il en a, des captures PNG. Créer une note n'envoie rien ;
+- `markspot_send` : envoie les notes ouvertes que tu as choisies, toutes d'une même page, à la session choisie, par le même envoi signé que « Envoyer à Claude ».
+
+Claude Desktop te montre les notes préparées en liste numérotée et n'envoie que les numéros que tu confirmes. Une fois les notes résolues par Claude Code, il lit les réponses, revérifie la page et propose un autre passage.
+
+Les outils apparaissent quelques secondes après que tu as coché l'option et disparaissent quand tu la décoches. Si Claude Desktop ne met pas sa liste à jour, relance-le. Un appel fait quand l'option est décochée est refusé.
 
 ## Les commandes
 

@@ -54,7 +54,7 @@ Si Alt+C ne fait rien, règle le raccourci dans `chrome://extensions/shortcuts`.
 5. La déclaration du programme local pour chaque navigateur. Sous Linux et macOS, c'est un fichier dans le dossier `NativeMessagingHosts` du navigateur, et un navigateur absent est sauté. Sous Windows, c'est une clé de registre que Chrome et Brave partagent.
 6. L'extension. Avec `--cdp`, `install` la charge dans ce Chrome. Sinon, cette étape est la ligne « to do » ci-dessus, et elle compte comme faite dès que l'extension s'est connectée au programme local.
 7. Le shell. Une fonction `claude` va dans les fichiers de démarrage de ton shell (`~/.zshrc`, `~/.bashrc`, `~/.bash_profile` sous macOS, et les profils PowerShell sous Windows), entre une ligne `# >>> markspot >>>` et une ligne `# <<< markspot <<<`. Chaque session Claude Code lancée avec `claude` peut alors écouter Markspot (voir [Réveil automatique](#réveil-automatique-aperçu-de-recherche)). Fish et cmd.exe ne sont pas pris.
-8. Le serveur MCP. Il lance `claude mcp add --scope user markspot`.
+8. Le serveur MCP. Il lance `claude mcp add --scope user markspot`. Quand le serveur enregistré pointe vers un autre Node ou un autre `cli.js` (un ancien clone, par exemple), il le retire et le remet.
 9. Le skill. Il relie `~/.claude/skills/markspot` au skill du paquet.
 
 Tu peux relancer `install` : il saute les étapes déjà faites. `markspot doctor` vérifie chaque étape, vérifie qu'on peut écrire dans le dossier des notes et montre la dernière connexion de l'extension. `markspot uninstall` défait chaque étape, puis supprime les notes et les dossiers de Markspot. Un dossier de notes choisi avec `--data-dir` reste, car un autre poste peut s'en servir, et un dossier de configuration qui contient des fichiers que Markspot n'a pas créés reste aussi.
@@ -134,6 +134,39 @@ Le message poussé dans la session contient seulement le numéro, l'identifiant 
 
 Claude Code ne confirme pas la réception, donc l'envoi reste en attente jusqu'à ce que Claude ouvre une de ses notes. Si rien ne se passe pendant 2 minutes (avertissement refusé, canaux désactivés par l'administrateur), l'envoi revient dans la file et la session disparaît de « Envoyer à » jusqu'à son prochain appel d'outil. Dis alors « écoute mes annotations » à la session, et `markspot listen` prendra l'envoi.
 
+## Utiliser Markspot depuis Claude Desktop
+
+Claude Desktop peut revoir un site pour toi et passer ses notes à une de tes sessions Claude Code. Dis-lui par exemple « analyse ce site et envoie-le à une de mes sessions ». L'option est décochée par défaut.
+
+1. Ajoute le serveur MCP de Markspot à Claude Desktop. Après `markspot install`, `claude mcp get markspot` affiche les deux chemins à prendre : `Command` est Node et `Args` commence par le `cli.js` de Markspot. Dans Claude Desktop, ouvre Settings, puis Developer, puis « Edit Config » (libellés de la version anglaise), et ajoute ceci à `claude_desktop_config.json` avec tes propres chemins (sous Windows, double chaque barre oblique inverse) :
+
+   ```json
+   {
+     "mcpServers": {
+       "markspot": {
+         "command": "C:\\Program Files\\nodejs\\node.exe",
+         "args": ["C:\\Users\\toi\\AppData\\Roaming\\npm\\node_modules\\markspot\\dist\\cli.js", "mcp"]
+       }
+     }
+   }
+   ```
+
+   Puis relance Claude Desktop.
+2. Coche l'option : clic droit sur l'icône Markspot dans la barre d'outils, puis « Claude Desktop peut envoyer des notes ». L'option est gardée dans le dossier des notes et n'apparaît que lorsque l'extension est reliée au programme local. Claude Desktop reçoit trois outils de plus en quelques secondes. S'ils n'apparaissent pas, relance Claude Desktop.
+3. Lance une session Claude Code qui écoute, comme dans [Envoyer les notes à Claude](#envoyer-les-notes-à-claude).
+
+Claude Desktop travaille alors dans cet ordre :
+
+1. Il liste les sessions qui écoutent la page (la même liste que « Envoyer à ») et te demande laquelle reçoit les notes.
+2. Il ouvre le site avec son propre outil de navigation, l'analyse et prépare une note par problème, avec un sélecteur CSS, le texte de l'élément et, quand il le peut, des captures.
+3. Il te montre les notes préparées en liste numérotée. Tu dis quels numéros envoyer : tous, quelques-uns ou aucun.
+4. Il n'envoie que ces notes. La session se réveille, les règle et résout chaque note avec une réponse.
+5. Il lit les réponses, revérifie la page et te propose un autre passage.
+
+Dans la page, une note de Claude Desktop affiche « De Claude Desktop » dans sa fiche et dans le menu des notes. Claude Code la lit comme tes propres notes, comme une suggestion à évaluer. Une telle note peut n'avoir aucune capture. Chaque poste qui partage le dossier des notes doit avoir Markspot 0.5.0 ou plus récent pour lire ces notes.
+
+Tant que l'option est cochée, tout programme de ce poste qui lance le serveur MCP de Markspot peut créer des notes et réveiller une session qui écoute. C'est le même accès que la clé d'envoi donne déjà à tout programme lancé sous ton compte. Rien n'écoute sur le réseau, et l'extension ne demande aucune nouvelle permission. Décoche l'option quand tu ne t'en sers pas.
+
 ## Langue
 
 L'extension est en anglais par défaut, et aussi en français. Fais un clic droit sur l'icône Markspot dans la barre d'outils, puis « Langue ». « Auto (langue du navigateur) » prend le français si le navigateur est en français et l'anglais sinon, et « English » et « Français » fixent la langue. Le choix est gardé dans le navigateur.
@@ -165,6 +198,7 @@ La clé est rangée hors du dossier des notes : `~/.config/markspot/dispatch.key
 - Sur un site tiers, les scripts de la page peuvent lire ce que tu tapes dans la boîte de commentaire ([issue #23](https://github.com/adryserage/Markspot/issues/23)).
 - Sur un site en développement (Vue, Svelte, React), la note garde le nom du composant et le chemin de son fichier source tel que l'outil de build le donne. Ce chemin peut contenir ton nom d'utilisateur. Il reste dans le dossier des notes et dans l'export.
 - Sous macOS et Linux, les fichiers sont créés avec les droits 0600 et les dossiers avec 0700. Sur un partage réseau, ce sont les droits du partage qui comptent, et toute personne qui peut y écrire peut y déposer une note. Claude traite chaque commentaire comme une demande à évaluer.
+- Avec « Claude Desktop peut envoyer des notes » coché, tout programme de ce poste qui lance le serveur MCP de Markspot peut créer des notes et réveiller une session qui écoute (voir [Utiliser Markspot depuis Claude Desktop](#utiliser-markspot-depuis-claude-desktop)).
 - La clé d'envoi signe les envois « Envoyer à Claude ». Garde-la secrète, et hors de tout dossier partagé (voir [Deux postes, un seul dossier de notes](#deux-postes-un-seul-dossier-de-notes)).
 
 ## Ajouter un navigateur

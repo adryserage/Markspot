@@ -2,6 +2,17 @@
 
 English: [CHANGELOG.md](CHANGELOG.md)
 
+## 0.5.0 (2026-11-18)
+
+### Ajouts
+
+- Claude Desktop peut revoir un site et envoyer ses notes à une de tes sessions Claude Code. Coche « Claude Desktop peut envoyer des notes » dans le menu du clic droit sur l'icône de la barre d'outils (décoché par défaut), puis ajoute le serveur MCP de Markspot à Claude Desktop. Claude Desktop reçoit trois outils : `markspot_list_sessions`, `markspot_create_annotation` et `markspot_send`. Il demande quelle session reçoit les notes, montre les notes préparées en liste numérotée, n'envoie que les numéros que tu confirmes, puis lit les réponses et revérifie la page. L'option est gardée dans le dossier des notes, dans `features.json`.
+- Une note de Claude Desktop affiche « De Claude Desktop » dans sa fiche et dans le menu des notes, et Claude Code la lit comme une suggestion de Claude Desktop. Une telle note peut n'avoir aucune capture. Chaque poste qui partage le dossier des notes doit avoir Markspot 0.5.0 ou plus récent pour lire ces notes.
+
+### Corrections
+
+- `markspot install` gardait le serveur MCP enregistré dans Claude Code avec un ancien chemin, par exemple après un passage d'un clone git au paquet npm. Supprimer le clone cassait alors Claude Code (« Couldn't reconnect to markspot »). `install` compare maintenant le Node et le `cli.js` enregistrés avec ceux de l'installation et réenregistre le serveur s'ils diffèrent, et `markspot doctor` montre l'étape comme manquante.
+
 ## 0.4.0 (2026-11-17)
 
 ### Ajouts
