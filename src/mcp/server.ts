@@ -4,9 +4,10 @@
 import { randomBytes } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import { stateOf, type AnnotationId, type Thread } from "../core/model.ts";
+import { CAPTURE_KINDS, type AnnotationId } from "../core/model.ts";
 import { REPLY_MAX, parseAnnotationId } from "../core/schema.ts";
 import type { AgentStore } from "../store/store.ts";
+import { registerDesktopTools } from "./desktop.ts";
 import { renderDispatch, renderSummary, renderThread, summary } from "./render.ts";
 import type { WaitListener } from "./wait-listener.ts";
 
@@ -31,6 +32,10 @@ export function createServer(
     onActivity?: (id?: AnnotationId) => void;
     /** Sans canal : l'outil d'attente annonce la session et reçoit les envois « Envoyer à Claude ». */
     dispatches?: WaitListener | undefined;
+    /** L'option « Claude Desktop peut envoyer des notes » au démarrage : la première liste d'outils en tient compte. */
+    desktopSend?: boolean;
+    /** Relecture de l'option pour montrer ou cacher les outils de Claude Desktop (3 s). */
+    featurePollMs?: number;
   } = {},
 ): McpServer {
   const { listenCommand, channel } = options;
@@ -178,8 +183,9 @@ export function createServer(
     {
       title: "Get annotation",
       description:
-        "Full data of one note: the user's comment, the page URL, the marked element (selector, text, attributes, " +
-        "computed styles), and two images: a close-up of the marked zone and the whole screen with the zone framed.",
+        "Full data of one note: the comment, who wrote it (the user, or Claude Desktop for notes it prepared), the page " +
+        "URL, the marked element (selector, text, attributes, computed styles), and up to two images: a close-up of the " +
+        "marked zone and the whole screen with the zone framed. A note from Claude Desktop may have no image.",
       inputSchema: z.strictObject({ id: z.string().describe("Note id from markspot_list_annotations") }),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -189,15 +195,13 @@ export function createServer(
       const thread = await store.get(noteId);
       if (!thread) throw new Error(`No note ${id}. It may have been cleared; list again.`);
       const token = randomBytes(8).toString("hex");
-      const text = renderThread(
-        thread,
-        { zone: store.capturePath(noteId, "zone"), context: store.capturePath(noteId, "context") },
-        token,
-      );
+      // Seules les captures que la note décrit : une note de Claude Desktop peut n'en avoir aucune.
+      const kinds = CAPTURE_KINDS.filter((kind) => thread.annotation.captures[kind] !== undefined);
+      const text = renderThread(thread, Object.fromEntries(kinds.map((kind) => [kind, store.capturePath(noteId, kind)])), token);
       const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
         { type: "text", text },
       ];
-      for (const kind of ["zone", "context"] as const) {
+      for (const kind of kinds) {
         const png = await store.capture(noteId, kind);
         if (png && png.length <= MAX_IMAGE_BYTES) {
           content.push({ type: "image", data: Buffer.from(png).toString("base64"), mimeType: "image/png" });
@@ -261,6 +265,17 @@ export function createServer(
       return { content: [{ type: "text", text: `Deleted ${removed.length} note${removed.length === 1 ? "" : "s"}.` }] };
     },
   );
+
+  const desktop = registerDesktopTools(server, store, options.desktopSend ?? false);
+  const poll = setInterval(() => {
+    store.desktopSend().then(desktop.set, () => undefined);
+  }, options.featurePollMs ?? 3_000);
+  poll.unref();
+  const closed = server.server.onclose;
+  server.server.onclose = () => {
+    clearInterval(poll);
+    closed?.();
+  };
 
   return server;
 }
