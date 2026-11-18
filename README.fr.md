@@ -223,7 +223,7 @@ Ensuite, dans `chrome://extensions`, active le mode développeur, clique sur « 
 npm run build       # dist/cli.js et extension/dist/
 npm run typecheck   # tsc --noEmit
 npm test            # tests unitaires (node --test)
-npm run smoke       # le serveur MCP construit et markspot listen
+npm run smoke       # le serveur MCP construit, markspot listen et le déroulé Claude Desktop
 npm run e2e         # essais de bout en bout sur un Chrome dédié, CDP sur 127.0.0.1:9223
 npm run e2e:real    # une vraie session Claude Code de bout en bout (coûte quelques tours)
 ```

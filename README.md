@@ -223,7 +223,7 @@ Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" an
 npm run build       # dist/cli.js and extension/dist/
 npm run typecheck   # tsc --noEmit
 npm test            # unit tests (node --test)
-npm run smoke       # the built MCP server and markspot listen
+npm run smoke       # the built MCP server, markspot listen and the Claude Desktop flow
 npm run e2e         # end-to-end tests on a dedicated Chrome with CDP on 127.0.0.1:9223
 npm run e2e:real    # a real Claude Code session end to end (costs a few turns)
 ```
