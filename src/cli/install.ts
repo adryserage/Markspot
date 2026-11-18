@@ -325,17 +325,36 @@ function browserSteps(ctx: Context): InstallStep[] {
   return steps;
 }
 
-/** Lance la CLI de Claude Code. ok=false si elle échoue ou n'est pas installée. */
-async function claude(args: string[]): Promise<{ ok: boolean; missing: boolean }> {
+/** Lance la CLI de Claude Code. ok=false si elle échoue ou n'est pas installée ; out est sa sortie. */
+async function claude(args: string[]): Promise<{ ok: boolean; missing: boolean; out: string }> {
   try {
     // Dans le try : cmdQuote refuse un chemin qui contient " % ou ! (installation claude.cmd).
     const command = claudeCommand(args, realProbe());
-    if (!command) return { ok: false, missing: true };
-    await run(command.file, command.args, { timeout: 60_000, windowsHide: true, windowsVerbatimArguments: command.verbatim });
-    return { ok: true, missing: false };
+    if (!command) return { ok: false, missing: true, out: "" };
+    const { stdout } = await run(command.file, command.args, { timeout: 60_000, windowsHide: true, windowsVerbatimArguments: command.verbatim });
+    return { ok: true, missing: false, out: stdout };
   } catch (error) {
-    return { ok: false, missing: (error as NodeJS.ErrnoException).code === "ENOENT" };
+    return { ok: false, missing: (error as NodeJS.ErrnoException).code === "ENOENT", out: "" };
   }
+}
+
+/** La commande et les arguments que `claude mcp get markspot` affiche, ou null si la sortie n'a pas cette forme. */
+export function registeredMcpCommand(output: string): { command: string; args: string } | null {
+  const field = (name: string) => output.match(new RegExp(`^[ \t]*${name}:[ \t]*(.*?)[ \t\r]*$`, "m"))?.[1];
+  const command = field("Command");
+  const args = field("Args");
+  return command === undefined || args === undefined ? null : { command, args };
+}
+
+/**
+ * Le serveur enregistré lance-t-il ce node et ce cli.js ? Claude Code affiche les arguments
+ * joints par une espace : on compare la même jointure. Sous Windows, sans tenir compte de la casse.
+ */
+export function mcpCommandMatches(output: string, nodePath: string, cliPath: string, ignoreCase: boolean): boolean {
+  const got = registeredMcpCommand(output);
+  if (!got) return false;
+  const same = (a: string, b: string) => (ignoreCase ? a.toLowerCase() === b.toLowerCase() : a === b);
+  return same(got.command, nodePath) && same(got.args, [cliPath, "mcp"].join(" "));
 }
 
 const SKILL_LINK = join(homedir(), ".claude", "skills", "markspot");
@@ -344,8 +363,13 @@ function claudeSteps(ctx: Context): InstallStep[] {
   return [
     {
       name: "MCP server in Claude Code (claude mcp add --scope user markspot)",
-      satisfied: async () => (await claude(["mcp", "get", "markspot"])).ok,
+      // Enregistré, mais avec un autre chemin (un clone supprimé, une autre installation) : à refaire.
+      satisfied: async () => {
+        const registered = await claude(["mcp", "get", "markspot"]);
+        return registered.ok && mcpCommandMatches(registered.out, ctx.nodePath, ctx.cliPath, PLATFORM === "win32");
+      },
       apply: async () => {
+        if ((await claude(["mcp", "get", "markspot"])).ok) await claude(["mcp", "remove", "--scope", "user", "markspot"]);
         const result = await claude(["mcp", "add", "--scope", "user", "markspot", "--", ctx.nodePath, ctx.cliPath, "mcp"]);
         if (result.missing) throw new Error("Claude Code CLI not found in PATH; install Claude Code, then run markspot install again");
         if (!result.ok) throw new Error("claude mcp add failed");
