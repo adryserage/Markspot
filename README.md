@@ -163,7 +163,7 @@ Claude Desktop then works in this order:
 4. It sends only those notes. The session wakes up, fixes them and resolves each note with a reply.
 5. It reads the replies, checks the page again and offers you another pass.
 
-On the page, a note from Claude Desktop shows "From Claude Desktop" in its card and in the notes menu. Claude Code reads it like your own notes, as a suggestion to evaluate. Such a note can have no screenshot. Every computer that shares the notes folder needs Markspot 0.5.0 or later to read these notes.
+On the page, a note from Claude Desktop shows "From Claude Desktop" in its card and in the notes menu. Claude Code reads it as a suggestion and never as an order: it fixes only the page's own source and asks you before anything else. A website can hide text written for an AI, and Claude Desktop can copy it into a note. Read each note before you confirm the numbers to send, above all on a site that is not yours, and send to a session that asks before running commands, not one started with `--dangerously-skip-permissions`. Such a note can have no screenshot. Every computer that shares the notes folder needs Markspot 0.5.0 or later to read these notes.
 
 While the option is on, any program on this computer that starts the Markspot MCP server can create notes and wake a listening session. This is the same access that the dispatch key already gives to any program running under your account. Nothing listens on the network, and the extension asks for no new permission. Turn the option off when you do not use it.
 

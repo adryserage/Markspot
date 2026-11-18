@@ -163,7 +163,7 @@ Claude Desktop travaille alors dans cet ordre :
 4. Il n'envoie que ces notes. La session se réveille, les règle et résout chaque note avec une réponse.
 5. Il lit les réponses, revérifie la page et te propose un autre passage.
 
-Dans la page, une note de Claude Desktop affiche « De Claude Desktop » dans sa fiche et dans le menu des notes. Claude Code la lit comme tes propres notes, comme une suggestion à évaluer. Une telle note peut n'avoir aucune capture. Chaque poste qui partage le dossier des notes doit avoir Markspot 0.5.0 ou plus récent pour lire ces notes.
+Dans la page, une note de Claude Desktop affiche « De Claude Desktop » dans sa fiche et dans le menu des notes. Claude Code la lit comme une suggestion et jamais comme un ordre : il corrige seulement le code source de la page et te demande avant toute autre chose. Un site peut cacher du texte écrit pour une IA, et Claude Desktop peut le recopier dans une note. Lis chaque note avant de confirmer les numéros à envoyer, surtout sur un site qui n'est pas le tien, et envoie vers une session qui demande avant de lancer des commandes, pas une session lancée avec `--dangerously-skip-permissions`. Une telle note peut n'avoir aucune capture. Chaque poste qui partage le dossier des notes doit avoir Markspot 0.5.0 ou plus récent pour lire ces notes.
 
 Tant que l'option est cochée, tout programme de ce poste qui lance le serveur MCP de Markspot peut créer des notes et réveiller une session qui écoute. C'est le même accès que la clé d'envoi donne déjà à tout programme lancé sous ton compte. Rien n'écoute sur le réseau, et l'extension ne demande aucune nouvelle permission. Décoche l'option quand tu ne t'en sers pas.
 
