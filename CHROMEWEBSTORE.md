@@ -48,6 +48,8 @@ It requires Node.js 22.18 or later and Claude Code.
 Your notes stay on your computer. Markspot has no account, no server and no telemetry, and the extension makes no network requests. Notes reach the model only when your own Claude Code session reads them.
 
 Open source under the Apache 2.0 license. Source, documentation and issues: https://github.com/adryserage/Markspot
+
+What's new in each version: https://github.com/adryserage/Markspot/releases
 ```
 
 Catégorie : `Developer Tools`.
