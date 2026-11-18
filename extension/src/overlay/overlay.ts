@@ -751,6 +751,8 @@ class Overlay {
     const state = stateClass(note);
     head.append(el("strong", "", t("overlay.note", { seq: annotation.seq })), el("span", `state ${state}`, stateLabel(state)));
     const comment = el("p", "card-comment", annotation.comment);
+    // Une note préparée par Claude Desktop : la personne la distingue des siennes.
+    const author = annotation.author.kind === "agent" ? el("p", "card-author", t("overlay.author", { name: annotation.author.name })) : null;
     const answer = resolution ? el("div", "card-reply") : null;
     if (answer && resolution) {
       answer.append(
@@ -843,7 +845,7 @@ class Overlay {
     const actions = el("div", "actions");
     actions.append(toggle, ...(editButton ? [editButton] : []), remove, close);
     head.append(el("span", "grip"));
-    panel.append(head, comment, ...(answer ? [answer] : []), preview, target, actions, problem);
+    panel.append(head, ...(author ? [author] : []), comment, ...(answer ? [answer] : []), preview, target, actions, problem);
     this.#openPanel(
       panel,
       () => {

@@ -127,9 +127,9 @@ host.onConnected(async () => {
   threads.clear();
   await host.request({ type: "sync" }).catch(() => null);
   await flushOutbox();
-  await loadWakeUp();
+  await loadHostMenus();
 });
-host.onDisconnected(() => void showWakeUp(null));
+host.onDisconnected(() => void showHostMenus(null, null));
 
 /**
  * Retire des notes de cette page, et seulement de celle-ci. Passe après l'envoi de la file en
@@ -408,11 +408,14 @@ const WAKE_ITEMS: ReadonlyArray<{ id: string; choice: WakeUp; title: Key }> = [
   { id: "markspot-wake-on", choice: "on", title: "worker.wakeOn" },
   { id: "markspot-wake-off", choice: "off", title: "worker.wakeOff" },
 ];
+const DESKTOP_MENU = "markspot-desktop-send";
 
 /** Le choix gardé dans le stockage (« auto » : la langue du navigateur). */
 let langChoice: LangChoice = "auto";
 /** Le réveil automatique lu par le programme local ; null : pas de programme local, pas de sous-menu. */
 let wakeUp: WakeUp | null = null;
+/** L'option « Claude Desktop peut envoyer des notes » lue par le programme local ; null : pas de case à cocher. */
+let desktopSend: boolean | null = null;
 let menus: Promise<void> = Promise.resolve();
 
 /** Refait le menu de l'icône dans la langue courante. En file : deux reconstructions ne se croisent pas. */
@@ -432,10 +435,14 @@ function buildMenus(): Promise<void> {
       for (const item of LANG_ITEMS) {
         await create({ id: item.id, parentId: LANG_MENU, type: "radio", title: t(item.title), checked: item.choice === langChoice, contexts: ["action"] });
       }
-      if (wakeUp === null) return;
-      await create({ id: WAKE_MENU, title: t("worker.wakeMenu"), contexts: ["action"] });
-      for (const item of WAKE_ITEMS) {
-        await create({ id: item.id, parentId: WAKE_MENU, type: "radio", title: t(item.title), checked: item.choice === wakeUp, contexts: ["action"] });
+      if (wakeUp !== null) {
+        await create({ id: WAKE_MENU, title: t("worker.wakeMenu"), contexts: ["action"] });
+        for (const item of WAKE_ITEMS) {
+          await create({ id: item.id, parentId: WAKE_MENU, type: "radio", title: t(item.title), checked: item.choice === wakeUp, contexts: ["action"] });
+        }
+      }
+      if (desktopSend !== null) {
+        await create({ id: DESKTOP_MENU, type: "checkbox", title: t("worker.desktopSend"), checked: desktopSend, contexts: ["action"] });
       }
     })
     .catch(() => undefined);
@@ -453,23 +460,30 @@ async function applyLangChoice(choice: LangChoice): Promise<void> {
   await buildMenus();
 }
 
-/** Montre le sous-menu avec cette valeur cochée, ou le cache (null). */
-async function showWakeUp(value: WakeUp | null): Promise<void> {
+/** Montre les réglages du programme local avec ces valeurs cochées, ou les cache (null). */
+async function showHostMenus(wake: WakeUp | null, desktop: boolean | null): Promise<void> {
   await ready;
-  wakeUp = value;
+  wakeUp = wake;
+  desktopSend = desktop;
   await buildMenus();
 }
 
-async function loadWakeUp(): Promise<void> {
-  const reply = await host.request({ type: "getWakeUp" }).catch(() => null);
-  // Un programme local plus ancien refuse la demande : pas de sous-menu.
-  await showWakeUp(reply?.type === "wakeUp" ? reply.wakeUp : null);
+async function loadHostMenus(): Promise<void> {
+  // Un programme local plus ancien refuse la demande : pas de sous-menu, pas de case.
+  const wake = await host.request({ type: "getWakeUp" }).catch(() => null);
+  const desktop = await host.request({ type: "getDesktopSend" }).catch(() => null);
+  await showHostMenus(wake?.type === "wakeUp" ? wake.wakeUp : null, desktop?.type === "desktopSend" ? desktop.on : null);
 }
 
 /** Chrome coche l'élément cliqué tout de suite : le menu est refait avec la valeur gardée, ou l'ancienne en cas d'échec. */
 async function chooseWakeUp(choice: WakeUp): Promise<void> {
   const reply = await host.request({ type: "setWakeUp", wakeUp: choice }).catch(() => null);
-  await showWakeUp(reply?.type === "wakeUp" ? reply.wakeUp : wakeUp);
+  await showHostMenus(reply?.type === "wakeUp" ? reply.wakeUp : wakeUp, desktopSend);
+}
+
+async function chooseDesktopSend(on: boolean): Promise<void> {
+  const reply = await host.request({ type: "setDesktopSend", on }).catch(() => null);
+  await showHostMenus(wakeUp, reply?.type === "desktopSend" ? reply.on : desktopSend);
 }
 
 /** La langue est lue au démarrage du worker : answer() l'attend avant de produire un texte. */
@@ -496,6 +510,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === EXPORT_MENU) return openExportPage(tab);
   const wake = WAKE_ITEMS.find((i) => i.id === info.menuItemId);
   if (wake) return chooseWakeUp(wake.choice);
+  if (info.menuItemId === DESKTOP_MENU) return chooseDesktopSend(info.checked === true);
   const item = LANG_ITEMS.find((i) => i.id === info.menuItemId);
   if (!item) return;
   await ready;

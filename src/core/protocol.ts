@@ -54,7 +54,10 @@ export type ExtensionToHost =
   | { type: "listeners"; requestId: number; url: string }
   /** Le réveil automatique gardé dans le dossier des notes ; « wakeUp » répond aux deux. */
   | { type: "getWakeUp"; requestId: number }
-  | { type: "setWakeUp"; requestId: number; wakeUp: WakeUp };
+  | { type: "setWakeUp"; requestId: number; wakeUp: WakeUp }
+  /** L'option « Claude Desktop peut envoyer des notes », gardée dans le dossier des notes ; « desktopSend » répond aux deux. */
+  | { type: "getDesktopSend"; requestId: number }
+  | { type: "setDesktopSend"; requestId: number; on: boolean };
 
 export type HostReply =
   | { type: "pong"; requestId: number; version: string; node: string }
@@ -71,6 +74,7 @@ export type HostReply =
   | { type: "listeners"; requestId: number; listeners: PublicListener[] }
   /** La valeur relue dans le dossier, après l'écriture pour setWakeUp. */
   | { type: "wakeUp"; requestId: number; wakeUp: WakeUp }
+  | { type: "desktopSend"; requestId: number; on: boolean }
   | { type: "rejected"; requestId: number | null; reason: string };
 
 export type HostPush =

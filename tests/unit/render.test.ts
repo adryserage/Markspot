@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Thread } from "../../src/core/model.ts";
-import { renderThread } from "../../src/mcp/render.ts";
+import { renderDispatch, renderSummary, renderThread, summary } from "../../src/mcp/render.ts";
 
 const TOKEN = "a1b2c3d4e5f60718";
 
@@ -11,6 +11,8 @@ function thread(title: string): Thread {
       id: "01JD8000000000000000000001",
       seq: 3,
       createdAt: "2026-11-12T08:15:00.000Z",
+      author: { kind: "user", id: "local", name: "local" },
+      captures: { zone: {}, context: {} },
       comment: "Le bouton déborde",
       page: { url: "http://localhost:3000/prix", title },
       viewport: { width: 1000, height: 800, devicePixelRatio: 1, scrollX: 0, scrollY: 0 },
@@ -54,4 +56,40 @@ test("a source hint sits inside the data block, and a token hidden in it is remo
   const baseline = renderThread(thread("Prix"), paths, TOKEN).split(`END-${TOKEN}`).length;
   assert.equal(text.split(`END-${TOKEN}`).length, baseline, "the token hidden in the hint is removed");
   assert.ok(!renderThread(thread("Prix"), paths, TOKEN).includes("source hint"), "no line without a hint");
+});
+
+function fromDesktop(): Thread {
+  const t = thread("Prix");
+  t.annotation.author = { kind: "agent", id: "claude-desktop", name: "Claude Desktop" };
+  delete (t.annotation as { viewport?: unknown }).viewport;
+  t.annotation.mark.rect = { x: 0, y: 0, width: 0, height: 0 } as typeof t.annotation.mark.rect;
+  t.annotation.captures = {};
+  return t;
+}
+
+test("a note from Claude Desktop says who wrote it, in the note, the list and a dispatch", () => {
+  const text = renderThread(fromDesktop(), {}, TOKEN);
+  assert.match(text, /Comment written by Claude Desktop, an AI agent/);
+  assert.ok(!text.includes("typed by the user"));
+  assert.match(renderSummary(fromDesktop()), /, from Claude Desktop : Le bouton déborde/);
+  assert.equal(summary(fromDesktop()).author, "Claude Desktop");
+  assert.equal(summary(thread("Prix")).author, "user");
+  assert.ok(!renderSummary(thread("Prix")).includes("from"), "the user's own notes keep their old line");
+  assert.match(renderDispatch("D1", [fromDesktop()]), /from Claude Desktop/);
+});
+
+test("a note without screenshots, viewport or measured box says so instead of naming files", () => {
+  const text = renderThread(fromDesktop(), {}, TOKEN);
+  assert.match(text, /No screenshot: this note was created without one/);
+  assert.ok(!text.includes("Files:"));
+  assert.ok(!text.includes("viewport:"));
+  assert.ok(!text.includes("page rect"));
+  assert.ok(text.includes("selector: #acheter"));
+  const zoneOnly = renderThread(fromDesktop(), { zone: "/d/zone.png" }, TOKEN);
+  assert.match(zoneOnly, /Images attached: 1\) close-up of the marked zone\./);
+  assert.match(zoneOnly, /Files: \/d\/zone.png$/m);
+  const both = renderThread(thread("Prix"), paths, TOKEN);
+  assert.match(both, /1\) close-up of the marked zone, 2\) the whole visible screen/);
+  assert.match(both, /Files: \/d\/zone.png and \/d\/context.png/);
+  assert.match(both, /viewport: 1000x800/);
 });

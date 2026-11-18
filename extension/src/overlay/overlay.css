@@ -414,6 +414,23 @@ button:focus-visible,
   overflow-wrap: anywhere;
 }
 
+.menu-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu-author,
+.card-author {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.card-author {
+  margin: 0 0 6px;
+}
+
 .menu-side {
   display: flex;
   flex-direction: column;

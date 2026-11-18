@@ -483,10 +483,13 @@ export class NotesMenu {
     const go = el("button", "menu-go");
     go.type = "button";
     go.setAttribute("aria-label", t("menu.goTo", { seq: note.annotation.seq }));
-    go.append(
-      el("span", `menu-seq ${state}`, String(note.annotation.seq)),
+    const { author } = note.annotation;
+    const text = el("span", "menu-text");
+    text.append(
       menuComment(note.annotation.comment),
+      ...(author.kind === "agent" ? [el("span", "menu-author", t("overlay.author", { name: author.name }))] : []),
     );
+    go.append(el("span", `menu-seq ${state}`, String(note.annotation.seq)), text);
     go.addEventListener("click", () => this.actions.goTo(note));
     const side = el("div", "menu-side");
     side.append(el("span", `state ${state}`, stateLabel(state)));

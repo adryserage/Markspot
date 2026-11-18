@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { LOCAL_SCOPE, STYLE_PROPS, type AnnotationId, type NewAnnotation } from "../../src/core/model.ts";
 import { NewAnnotationSchema } from "../../src/core/schema.ts";
-import { openAgentStore, openHostStore, readWakeUp, type StoreConfig } from "../../src/store/store.ts";
+import { openAgentStore, openHostStore, readDesktopSend, readWakeUp, type StoreConfig } from "../../src/store/store.ts";
 
 const dirs: string[] = [];
 after(async () => {
@@ -259,4 +259,54 @@ test("wake-up: a missing folder, or a settings file of any other shape, reads as
   await rm(file);
   await mkdir(file);
   assert.equal(await readWakeUp(cfg.dataDir), "ask", "a folder in its place");
+});
+
+test("Claude Desktop option: off until turned on, kept in its own file, settings.json untouched", async () => {
+  const cfg = await config();
+  const store = await openHostStore(cfg);
+  await store.setWakeUp("on");
+  const settings = await readFile(join(cfg.dataDir, "settings.json"), "utf8");
+  assert.equal(await store.desktopSend(), false);
+  assert.equal(await store.setDesktopSend(true), true);
+  assert.equal(await (await openAgentStore(cfg)).desktopSend(), true, "the MCP server reads the same folder");
+  assert.deepEqual(JSON.parse(await readFile(join(cfg.dataDir, "features.json"), "utf8")), { schemaVersion: 1, desktopSend: true });
+  assert.equal(await readFile(join(cfg.dataDir, "settings.json"), "utf8"), settings, "a 0.4.0 reader still sees the same settings");
+  assert.equal(await store.setDesktopSend(false), false);
+  assert.equal(await readDesktopSend(cfg.dataDir), false);
+  assert.deepEqual(await readdir(join(cfg.dataDir, ".staging")), [], "no temporary file left");
+});
+
+test("Claude Desktop option: a missing folder, or a features file of any other shape, reads as off", async () => {
+  const cfg = await config();
+  assert.equal(await readDesktopSend(join(cfg.dataDir, "absent")), false);
+  const file = join(cfg.dataDir, "features.json");
+  for (const body of [
+    "",
+    "{not json",
+    "true",
+    JSON.stringify({ schemaVersion: 1, desktopSend: "yes" }),
+    JSON.stringify({ schemaVersion: 2, desktopSend: true }),
+    JSON.stringify({ desktopSend: true }),
+    JSON.stringify({ schemaVersion: 1, desktopSend: true, extra: 1 }),
+  ]) {
+    await writeFile(file, body);
+    assert.equal(await readDesktopSend(cfg.dataDir), false, body);
+  }
+  await rm(file);
+  await mkdir(file);
+  assert.equal(await readDesktopSend(cfg.dataDir), false, "a folder in its place");
+});
+
+test("a note without screenshots is written, read back and listed; a capture without its image is refused", async () => {
+  const cfg = await config();
+  const agent = await openAgentStore(cfg);
+  const note = { ...newAnnotation("Contraste trop faible"), captures: {} };
+  const thread = await agent.create(note, {});
+  assert.equal(thread.annotation.seq, 1);
+  assert.deepEqual(thread.annotation.captures, {});
+  assert.equal(await agent.capture(note.id, "zone"), null);
+  assert.deepEqual((await (await openHostStore(cfg)).list()).map((t) => t.annotation.id), [note.id], "the page sees it too");
+  const half = { ...newAnnotation(), captures: { zone: newAnnotation().captures.zone! } };
+  await assert.rejects(agent.create(half, {}), /must come together/);
+  assert.equal(await agent.get(half.id), null, "nothing written");
 });
