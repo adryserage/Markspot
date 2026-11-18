@@ -38,6 +38,7 @@ import {
   removeFromOutbox,
 } from "./local-store.ts";
 import { OVERLAY_PORT, type NoteView, type OverlayPush, type OverlayReply, type OverlayRequest } from "./messages.ts";
+import { createSyncGate } from "./sync-gate.ts";
 
 declare const __MARKSPOT_NATIVE__: boolean;
 
@@ -47,6 +48,8 @@ const host = createHostLink(__MARKSPOT_NATIVE__);
 /** Notes écrites par l'hôte, tenues à jour par sync et par ses poussées. */
 const threads = new Map<AnnotationId, Thread>();
 const overlays = new Set<chrome.runtime.Port>();
+/** Une réponse qui lit threads attend le sync qui suit chaque connexion (voir sync-gate.ts). */
+const threadsSync = createSyncGate(3000);
 
 function broadcast(push: OverlayPush, url: string): void {
   const key = pageKeyOf(url);
@@ -124,8 +127,10 @@ function flushOutbox(): Promise<void> {
 }
 
 host.onConnected(async () => {
+  threadsSync.expect();
   threads.clear();
   await host.request({ type: "sync" }).catch(() => null);
+  threadsSync.done();
   await flushOutbox();
   await loadHostMenus();
 });
@@ -239,6 +244,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
 async function answer(request: OverlayRequest, sender: chrome.runtime.MessageSender): Promise<OverlayReply> {
   await ready; // la langue est lue avant le premier texte rendu à la page
+  if (request.type !== "capture") await threadsSync.ready();
   switch (request.type) {
     case "capture": {
       const windowId = sender.tab?.windowId;
@@ -537,5 +543,7 @@ globalThis.markspot = api;
 
 chrome.runtime.onStartup.addListener(host.connect);
 chrome.runtime.onInstalled.addListener(host.connect);
+// Au réveil, les réponses attendent le sync de cette connexion ; sans hôte, rien à attendre.
+if (__MARKSPOT_NATIVE__) threadsSync.expect();
 host.connect();
 void purgeOldDrafts(Date.now());
