@@ -11,6 +11,7 @@ English: [CHANGELOG.md](CHANGELOG.md)
 
 ### Corrections
 
+- Juste après un réveil de l'extension par Chrome, « Envoyer à Claude » pouvait répondre « Non envoyé : aucune note ouverte reçue par le programme local », et la page montrer moins de pastilles : l'extension n'avait pas encore rechargé ses notes depuis le programme local. Elle attend maintenant ce rechargement, 3 secondes au plus.
 - `markspot install` gardait le serveur MCP enregistré dans Claude Code avec un ancien chemin, par exemple après un passage d'un clone git au paquet npm. Supprimer le clone cassait alors Claude Code (« Couldn't reconnect to markspot »). `install` compare maintenant le Node et le `cli.js` enregistrés avec ceux de l'installation et réenregistre le serveur s'ils diffèrent, et `markspot doctor` montre l'étape comme manquante.
 
 ## 0.4.0 (2026-11-17)

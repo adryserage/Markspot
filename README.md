@@ -68,7 +68,7 @@ markspot install
 
 `install` redoes only the steps that changed. The Chrome Web Store updates the extension on its own. Do not run `markspot uninstall` to update, because it also deletes your notes.
 
-If you loaded the extension with "Load unpacked" before it was on the Chrome Web Store, remove that copy in `chrome://extensions`, then add Markspot from the store. Your notes stay in place.
+If you loaded the extension with "Load unpacked" before it was on the Chrome Web Store, remove that copy in `chrome://extensions`, then add Markspot from the store. The notes the local program has received stay in place. A note that still shows "Pending" is only in the browser, and removing the extension deletes it: check that no note shows "Pending" before you remove the extension.
 
 A beta (`npm install -g markspot@next`) can need a newer extension than the one on the store. The package includes it: in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose `$(npm root -g)/markspot/extension`.
 
@@ -217,7 +217,7 @@ npm run build
 node dist/cli.js install
 ```
 
-Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose the `extension/` folder of the repository. Remove the store copy first, since both have the same id. From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
+Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose the `extension/` folder of the repository. Remove the store copy first, since both have the same id, and check before that no note shows "Pending". From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
 
 ```sh
 npm run build       # dist/cli.js and extension/dist/

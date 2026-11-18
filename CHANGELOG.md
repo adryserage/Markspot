@@ -11,6 +11,7 @@ Français : [CHANGELOG.fr.md](CHANGELOG.fr.md)
 
 ### Fixed
 
+- Right after Chrome woke the extension up, "Send to Claude" could answer "Not sent: no open note received by the local program" and the page could show fewer pins, because the extension had not reloaded its notes from the local program yet. It now waits for that reload, up to 3 seconds.
 - `markspot install` kept the MCP server registered in Claude Code with an old path, for example after a move from a git clone to the npm package. Deleting the clone then broke Claude Code ("Couldn't reconnect to markspot"). `install` now compares the registered Node and `cli.js` with the current ones and registers the server again when they differ, and `markspot doctor` shows the step as missing.
 
 ## 0.4.0 (2026-11-17)

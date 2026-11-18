@@ -68,7 +68,7 @@ markspot install
 
 `install` refait seulement les étapes qui ont changé. Le Chrome Web Store met l'extension à jour tout seul. Ne lance pas `markspot uninstall` pour mettre à jour, car il supprime aussi tes notes.
 
-Si tu as chargé l'extension avec « Charger l'extension non empaquetée » avant sa publication sur le Chrome Web Store, retire cette copie dans `chrome://extensions`, puis ajoute Markspot depuis la boutique. Tes notes restent en place.
+Si tu as chargé l'extension avec « Charger l'extension non empaquetée » avant sa publication sur le Chrome Web Store, retire cette copie dans `chrome://extensions`, puis ajoute Markspot depuis la boutique. Les notes déjà reçues par le programme local restent en place. Une note qui affiche encore « En attente » n'est que dans le navigateur, et retirer l'extension l'efface : vérifie qu'aucune note n'affiche « En attente » avant de retirer l'extension.
 
 Une beta (`npm install -g markspot@next`) peut demander une extension plus récente que celle de la boutique. Le paquet la contient : dans `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis `$(npm root -g)/markspot/extension`.
 
@@ -217,7 +217,7 @@ npm run build
 node dist/cli.js install
 ```
 
-Ensuite, dans `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Retire d'abord la copie de la boutique, car les deux ont le même identifiant. Depuis un clone, `node dist/cli.js` remplace `markspot` dans toutes les commandes de cette page.
+Ensuite, dans `chrome://extensions`, active le mode développeur, clique sur « Charger l'extension non empaquetée » et choisis le dossier `extension/` du dépôt. Retire d'abord la copie de la boutique, car les deux ont le même identifiant, et vérifie avant qu'aucune note n'affiche « En attente ». Depuis un clone, `node dist/cli.js` remplace `markspot` dans toutes les commandes de cette page.
 
 ```sh
 npm run build       # dist/cli.js et extension/dist/
