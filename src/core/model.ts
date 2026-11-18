@@ -37,9 +37,15 @@ export type Author =
   | { kind: "agent"; id: string; name: string };
 
 export const LOCAL_USER: Author = { kind: "user", id: "local", name: "local" };
+/** Auteur des notes créées par l'outil markspot_create_annotation. */
+export const CLAUDE_DESKTOP: Author = { kind: "agent", id: "claude-desktop", name: "Claude Desktop" };
 
-/** Version hébergée : { kind: "hub-widget"; trust: "untrusted" }. */
-export type Source = { kind: "extension"; trust: "owner" };
+/**
+ * D'où vient la note : l'extension, ou un client MCP de ce poste (Claude Desktop) quand
+ * l'option « Claude Desktop peut envoyer des notes » est cochée.
+ * Version hébergée : { kind: "hub-widget"; trust: "untrusted" }.
+ */
+export type Source = { kind: "extension"; trust: "owner" } | { kind: "mcp"; trust: "owner" };
 
 export interface ElementAnchor {
   selector: string;
@@ -71,6 +77,7 @@ export interface Viewport {
   scrollY: number;
 }
 
+/** rect : la partie de la page que montre l'image, de taille nulle quand elle n'est pas connue. */
 export interface CaptureMeta { rect: PageRect; width: number; height: number }
 export const CAPTURE_KINDS = ["zone", "context"] as const;
 export type CaptureKind = (typeof CAPTURE_KINDS)[number];
@@ -83,9 +90,11 @@ export interface NewAnnotation {
   source: Source;
   page: { url: PageUrl; title: string };
   mark: Mark;
-  viewport: Viewport;
+  /** Absent pour une note de Claude Desktop : la fenêtre de son navigateur n'est pas connue. */
+  viewport?: Viewport;
   comment: string;
-  captures: Record<CaptureKind, CaptureMeta>;
+  /** Une capture par fichier <kind>.png. L'extension donne les deux ; Claude Desktop, aucune, une ou deux. */
+  captures: Partial<Record<CaptureKind, CaptureMeta>>;
 }
 
 export interface Annotation extends NewAnnotation {

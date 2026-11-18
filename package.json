@@ -1,6 +1,6 @@
 {
   "name": "markspot",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Mark a spot on a web page and leave a note: Claude Code reads it, fixes the code and answers on the page.",
   "keywords": [
     "claude",
@@ -38,7 +38,7 @@
     "icons": "node scripts/icons.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/unit/",
-    "smoke": "node tests/smoke-mcp.ts && node tests/smoke-listen.ts",
+    "smoke": "node tests/smoke-mcp.ts && node tests/smoke-listen.ts && node tests/smoke-desktop.ts",
     "e2e:real": "npm run build && node tests/e2e/real-session.e2e.ts",
     "e2e": "node tests/e2e/annotate.e2e.ts && node tests/e2e/edit-delete.e2e.ts"
   },

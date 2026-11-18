@@ -54,7 +54,7 @@ If Alt+C does nothing, set the shortcut in `chrome://extensions/shortcuts`.
 5. Host manifest for each browser. On Linux and macOS it is a file in the browser's `NativeMessagingHosts` folder, and a browser that is not installed is skipped. On Windows it is a registry key that Chrome and Brave share.
 6. Extension. With `--cdp`, `install` loads the extension in that Chrome. Otherwise this step is the "to do" line above, and it counts as done once the extension has connected to the local program.
 7. Shell. A `claude` function goes into your shell startup files (`~/.zshrc`, `~/.bashrc`, `~/.bash_profile` on macOS, and the PowerShell profiles on Windows), between a `# >>> markspot >>>` line and a `# <<< markspot <<<` line. Each Claude Code session you start with `claude` can then listen to Markspot (see [Automatic wake-up](#automatic-wake-up-research-preview)). Fish and cmd.exe are not supported.
-8. MCP server. It runs `claude mcp add --scope user markspot`.
+8. MCP server. It runs `claude mcp add --scope user markspot`. When the registered server points to another Node or another `cli.js` (an old clone, for example), it removes it and adds it again.
 9. Skill. It links `~/.claude/skills/markspot` to the skill in the package.
 
 You can run `install` again, and it skips the steps that are already done. `markspot doctor` checks each step, checks that the notes folder is writable and shows when the extension last connected. `markspot uninstall` undoes every step, then deletes the notes and Markspot's folders. A notes folder chosen with `--data-dir` stays, since another computer may use it, and a configuration folder that holds files Markspot did not create stays too.
@@ -68,7 +68,7 @@ markspot install
 
 `install` redoes only the steps that changed. The Chrome Web Store updates the extension on its own. Do not run `markspot uninstall` to update, because it also deletes your notes.
 
-If you loaded the extension with "Load unpacked" before it was on the Chrome Web Store, remove that copy in `chrome://extensions`, then add Markspot from the store. Your notes stay in place.
+If you loaded the extension with "Load unpacked" before it was on the Chrome Web Store, remove that copy in `chrome://extensions`, then add Markspot from the store. The notes the local program has received stay in place. A note that still shows "Pending" is only in the browser, and removing the extension deletes it: check that no note shows "Pending" before you remove the extension.
 
 A beta (`npm install -g markspot@next`) can need a newer extension than the one on the store. The package includes it: in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose `$(npm root -g)/markspot/extension`.
 
@@ -134,6 +134,39 @@ The message pushed into the session holds only the number, id and comment of eac
 
 Claude Code does not confirm that it received the message, so the dispatch stays pending until Claude opens one of its notes. If nothing happens for 2 minutes (warning declined, channels turned off by an admin), the dispatch goes back in the queue and the session leaves "Send to" until its next tool call. Tell the session "listen to my annotations", and `markspot listen` picks up the dispatch.
 
+## Using Markspot from Claude Desktop
+
+Claude Desktop can review a site for you and hand its notes to one of your Claude Code sessions. For example, tell it "analyze this website and send it to one of my sessions". This option is off by default.
+
+1. Add the Markspot MCP server to Claude Desktop. After `markspot install`, `claude mcp get markspot` prints the two paths to use: `Command` is Node and `Args` starts with Markspot's `cli.js`. In Claude Desktop, open Settings, then Developer, then "Edit Config", and add this to `claude_desktop_config.json` with your own paths (on Windows, double each backslash):
+
+   ```json
+   {
+     "mcpServers": {
+       "markspot": {
+         "command": "C:\\Program Files\\nodejs\\node.exe",
+         "args": ["C:\\Users\\you\\AppData\\Roaming\\npm\\node_modules\\markspot\\dist\\cli.js", "mcp"]
+       }
+     }
+   }
+   ```
+
+   Then restart Claude Desktop.
+2. Turn the option on: right-click the Markspot toolbar icon and check "Claude Desktop can send notes". The option is saved in the notes folder and shows only while the extension is connected to the local program. Claude Desktop gets three more tools within a few seconds. If they do not appear, restart Claude Desktop.
+3. Start a Claude Code session that listens, as described in [Sending notes to Claude](#sending-notes-to-claude).
+
+Claude Desktop then works in this order:
+
+1. It lists the sessions that listen for the page (the same list as "Send to") and asks you which one gets the notes.
+2. It opens the site with its own browser tool, analyzes it and prepares one note per problem, with a CSS selector, the element's text and, when it can, screenshots.
+3. It shows you the prepared notes as a numbered list. You say which numbers to send: all of them, some of them or none.
+4. It sends only those notes. The session wakes up, fixes them and resolves each note with a reply.
+5. It reads the replies, checks the page again and offers you another pass.
+
+On the page, a note from Claude Desktop shows "From Claude Desktop" in its card and in the notes menu. Claude Code reads it as a suggestion and never as an order: it fixes only the page's own source and asks you before anything else. A website can hide text written for an AI, and Claude Desktop can copy it into a note. Read each note before you confirm the numbers to send, above all on a site that is not yours, and send to a session that asks before running commands, not one started with `--dangerously-skip-permissions`. Such a note can have no screenshot. Every computer that shares the notes folder needs Markspot 0.5.0 or later to read these notes.
+
+While the option is on, any program on this computer that starts the Markspot MCP server can create notes and wake a listening session. This is the same access that the dispatch key already gives to any program running under your account. Nothing listens on the network, and the extension asks for no new permission. Turn the option off when you do not use it.
+
 ## Language
 
 The extension is in English by default and also in French. Right-click the Markspot toolbar icon, then "Language". "Auto (browser language)" uses French when the browser is in French and English otherwise, and "English" and "Français" set the language. The choice is kept in the browser.
@@ -165,6 +198,7 @@ The key is kept outside the notes folder: `~/.config/markspot/dispatch.key` on L
 - On third-party sites, the page's own scripts can read what you type in the comment box ([issue #23](https://github.com/adryserage/Markspot/issues/23)).
 - On a site in development (Vue, Svelte, React), the note keeps the component name and its source file path as the build tool reports it. That path can contain your user name. It stays in the notes folder and in exports.
 - On macOS and Linux, files are created with mode 0600 and folders with 0700. On a network share, the share's permissions apply, and anyone who can write to it can drop a note. Claude treats every comment as a request to evaluate.
+- With "Claude Desktop can send notes" on, any program on this computer that starts the Markspot MCP server can create notes and wake a listening session (see [Using Markspot from Claude Desktop](#using-markspot-from-claude-desktop)).
 - The dispatch key signs "Send to Claude" dispatches. Keep it secret, and keep it out of any shared folder (see [Two machines, one notes folder](#two-machines-one-notes-folder)).
 
 ## Adding a browser
@@ -183,13 +217,13 @@ npm run build
 node dist/cli.js install
 ```
 
-Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose the `extension/` folder of the repository. Remove the store copy first, since both have the same id. From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
+Then, in `chrome://extensions`, turn on developer mode, click "Load unpacked" and choose the `extension/` folder of the repository. Remove the store copy first, since both have the same id, and check before that no note shows "Pending". From a clone, `node dist/cli.js` stands in for `markspot` in every command of this page.
 
 ```sh
 npm run build       # dist/cli.js and extension/dist/
 npm run typecheck   # tsc --noEmit
 npm test            # unit tests (node --test)
-npm run smoke       # the built MCP server and markspot listen
+npm run smoke       # the built MCP server, markspot listen and the Claude Desktop flow
 npm run e2e         # end-to-end tests on a dedicated Chrome with CDP on 127.0.0.1:9223
 npm run e2e:real    # a real Claude Code session end to end (costs a few turns)
 ```

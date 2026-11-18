@@ -7,6 +7,10 @@
 //   <dataDir>/.staging/<pid>-<id>/           note en cours d'écriture, invisible des lecteurs
 //   <dataDir>/.trash/                        notes en cours de suppression
 //   <dataDir>/settings.json                  réglages du dossier (réveil automatique), remplacé par rename
+//   <dataDir>/features.json                  option « Claude Desktop peut envoyer des notes », remplacé par rename
+//
+// Une note est créée par un hôte (l'extension) ou par un serveur MCP (outil de Claude Desktop,
+// seulement si features.json le permet) : même écriture dans .staging puis rename.
 //
 // resolution.json a deux écrivains possibles, un serveur MCP (Claude) ou l'hôte (la personne
 // règle la note à la main) : il est créé par link exclusif, le premier gagne. Pour le reste,
@@ -35,7 +39,7 @@ import type {
 import { CAPTURE_KINDS, LOCAL_SCOPE, stateOf } from "../core/model.ts";
 import { consumedDirOf, currentPlatform, pathsFor } from "../core/paths.ts";
 import type { WakeUp } from "../core/protocol.ts";
-import { AnnotationSchema, ResolutionSchema, SettingsSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
+import { AnnotationSchema, FeaturesSchema, ResolutionSchema, SettingsSchema, parseAnnotationId, scopeDir } from "../core/schema.ts";
 import type { PublicListener } from "./dispatch.ts";
 
 export interface StoreConfig {
@@ -84,9 +88,25 @@ export type EditOutcome =
   | { kind: "already_resolved"; thread: Thread }
   | { kind: "not_found" };
 
-export interface HostStore extends ThreadReader {
+/** Une image par capture décrite dans annotation.captures, ni plus ni moins. */
+export type CapturePngs = Partial<Record<CaptureKind, Uint8Array>>;
+
+/** Ce que l'hôte (la page) et le serveur MCP (Claude Desktop) écrivent de la même façon. */
+interface NoteWriter {
   /** Idempotent sur annotation.id. La note apparaît entière ou pas du tout. */
-  create(annotation: NewAnnotation, pngs: Record<CaptureKind, Uint8Array>): Promise<Thread>;
+  create(annotation: NewAnnotation, pngs: CapturePngs): Promise<Thread>;
+  /**
+   * « Envoyer à Claude » : dépose un envoi pour le projet `to`. Sans `to`, le seul projet
+   * qui écoute cette adresse ; s'il y en a plusieurs, ou aucun, rien n'est déposé.
+   */
+  send(ids: AnnotationId[], url: string, to?: string, host?: string): Promise<SendOutcome>;
+  /** Les sessions qui écoutent cette adresse, pour le choix dans la page. */
+  listeners(url: string): Promise<PublicListener[]>;
+  /** L'option « Claude Desktop peut envoyer des notes » de ce dossier. */
+  desktopSend(): Promise<boolean>;
+}
+
+export interface HostStore extends ThreadReader, NoteWriter {
   /** Remplace le commentaire d'une note ouverte. Une note réglée ne change plus. */
   editComment(id: AnnotationId, comment: string): Promise<EditOutcome>;
   /**
@@ -101,18 +121,13 @@ export interface HostStore extends ThreadReader {
    * réponse l'a remplacée entre-temps, rien n'est retiré (changed).
    */
   reopen(id: AnnotationId, resolvedAt: string): Promise<ReopenOutcome>;
-  /**
-   * « Envoyer à Claude » : dépose un envoi pour le projet `to`. Sans `to`, le seul projet
-   * qui écoute cette adresse ; s'il y en a plusieurs, ou aucun, rien n'est déposé.
-   */
-  send(ids: AnnotationId[], url: string, to?: string, host?: string): Promise<SendOutcome>;
-  /** Les sessions qui écoutent cette adresse, pour le choix dans la page. */
-  listeners(url: string): Promise<PublicListener[]>;
   /** Appelle onChange pour chaque note créée, réglée ou retirée par un autre processus. */
   watch(onChange: (change: ThreadChange) => void): { close(): void };
   wakeUp(): Promise<WakeUp>;
   /** Écrit le choix pour tout le dossier, puis rend la valeur relue. */
   setWakeUp(value: WakeUp): Promise<WakeUp>;
+  /** Coche ou décoche l'option pour tout le dossier, puis rend la valeur relue. */
+  setDesktopSend(on: boolean): Promise<boolean>;
 }
 
 export type SendOutcome =
@@ -133,7 +148,7 @@ export type ResolveOutcome =
   | { kind: "already_resolved"; thread: Thread }
   | { kind: "not_found" };
 
-export interface AgentStore extends ThreadReader {
+export interface AgentStore extends ThreadReader, NoteWriter {
   resolve(id: AnnotationId, reply: string, by: Author): Promise<ResolveOutcome>;
   /** Rend les identifiants retirés. Relancé, il ne retire rien de plus. */
   clear(filter: { state: ThreadState | "all"; urlPrefix?: string }): Promise<AnnotationId[]>;
@@ -374,53 +389,65 @@ async function purgeStale(dir: string): Promise<void> {
 }
 
 const settingsFile = (dataDir: string) => join(dataDir, "settings.json");
+const featuresFile = (dataDir: string) => join(dataDir, "features.json");
 
-/**
- * Le réveil automatique de ce dossier. Absent, illisible ou d'une autre forme : « ask ».
- * Le partage peut être écrit par d'autres : au pire, un fichier forgé choisit parmi les trois valeurs.
- */
-export async function readWakeUp(dataDir: string): Promise<WakeUp> {
-  const raw = await readJson(settingsFile(dataDir)).catch(() => undefined);
-  const settings = SettingsSchema.safeParse(raw);
-  return settings.success ? settings.data.wakeUp : "ask";
+/** Remplace un fichier du dossier par un temporaire de .staging (purgé s'il reste) : un lecteur voit l'ancien ou le nouveau. */
+async function replaceFile(paths: Layout, file: string, body: string): Promise<void> {
+  await mkdir(paths.staging, { recursive: true, mode: DIR_MODE });
+  const tmp = join(paths.staging, `replace.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  await writeFile(tmp, body, { mode: FILE_MODE });
+  try {
+    await renameRetry(tmp, file);
+  } catch (error) {
+    await unlink(tmp).catch(() => undefined);
+    throw error;
+  }
 }
 
-export async function openHostStore(config: StoreConfig): Promise<HostStore> {
-  const paths = layout(config);
-  const linkFile = config.linkFile ?? link;
+/** L'option « Claude Desktop peut envoyer des notes ». Absente, illisible ou d'une autre forme : décochée. */
+export async function readDesktopSend(dataDir: string): Promise<boolean> {
+  const raw = await readJson(featuresFile(dataDir)).catch(() => undefined);
+  const features = FeaturesSchema.safeParse(raw);
+  return features.success && features.data.desktopSend;
+}
+
+async function createNote(paths: Layout, read: ThreadReader, input: NewAnnotation, pngs: CapturePngs): Promise<Thread> {
+  for (const kind of CAPTURE_KINDS) {
+    if ((input.captures[kind] === undefined) !== (pngs[kind] === undefined)) {
+      throw new Error(`capture ${kind} of note ${input.id}: description and image must come together`);
+    }
+  }
+  const existing = await read.get(input.id);
+  if (existing) return existing;
   await mkdir(paths.scope, { recursive: true, mode: DIR_MODE });
   await mkdir(paths.staging, { recursive: true, mode: DIR_MODE });
-  await purgeStale(paths.staging);
-  await purgeStale(paths.trash);
-  const read = reader(paths);
+  const seq = await reserveSeq(paths, input.id);
+  const annotation: Annotation = { ...input, schemaVersion: 1, seq };
+  const staging = join(paths.staging, `${process.pid}-${input.id}`);
+  await rm(staging, { recursive: true, force: true });
+  await mkdir(staging, { mode: DIR_MODE });
+  await writeFile(join(staging, "annotation.json"), JSON.stringify(annotation, null, 2), { mode: FILE_MODE });
+  for (const kind of CAPTURE_KINDS) {
+    const png = pngs[kind];
+    if (png) await writeFile(join(staging, `${kind}.png`), png, { mode: FILE_MODE });
+  }
+  try {
+    await renameRetry(staging, paths.note(input.id));
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    // Sous Windows, une cible déjà là rend EPERM : la note existe, c'est un rejeu.
+    if (!["EEXIST", "ENOTEMPTY", "EPERM", "EACCES"].includes(code(error) ?? "") || !(await read.get(input.id))) {
+      throw error;
+    }
+  }
+  const thread = await read.get(input.id);
+  if (!thread) throw new Error(`note ${input.id} vanished after creation`);
+  return thread;
+}
 
+function noteWriter(config: StoreConfig, paths: Layout, read: ThreadReader): NoteWriter {
   return {
-    ...read,
-    async create(input, pngs) {
-      const existing = await read.get(input.id);
-      if (existing) return existing;
-      const seq = await reserveSeq(paths, input.id);
-      const annotation: Annotation = { ...input, schemaVersion: 1, seq };
-      const staging = join(paths.staging, `${process.pid}-${input.id}`);
-      await rm(staging, { recursive: true, force: true });
-      await mkdir(staging, { mode: DIR_MODE });
-      await writeFile(join(staging, "annotation.json"), JSON.stringify(annotation, null, 2), { mode: FILE_MODE });
-      for (const kind of CAPTURE_KINDS) await writeFile(join(staging, `${kind}.png`), pngs[kind], { mode: FILE_MODE });
-      try {
-        await renameRetry(staging, paths.note(input.id));
-      } catch (error) {
-        await rm(staging, { recursive: true, force: true });
-        // Sous Windows, une cible déjà là rend EPERM : la note existe, c'est un rejeu.
-        if (!["EEXIST", "ENOTEMPTY", "EPERM", "EACCES"].includes(code(error) ?? "") || !(await read.get(input.id))) {
-          throw error;
-        }
-      }
-      const thread = await read.get(input.id);
-      if (!thread) throw new Error(`note ${input.id} vanished after creation`);
-      return thread;
-    },
-
-    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
+    create: (input, pngs) => createNote(paths, read, input, pngs),
 
     async send(ids, url, to, host) {
       const { cleanName, commentHash, publicListeners, purgeDispatch, writeDispatch } = await import("./dispatch.ts");
@@ -454,6 +481,35 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
       const { publicListeners } = await import("./dispatch.ts");
       return publicListeners(config.dataDir, url);
     },
+
+    desktopSend: () => readDesktopSend(config.dataDir),
+  };
+}
+
+/**
+ * Le réveil automatique de ce dossier. Absent, illisible ou d'une autre forme : « ask ».
+ * Le partage peut être écrit par d'autres : au pire, un fichier forgé choisit parmi les trois valeurs.
+ */
+export async function readWakeUp(dataDir: string): Promise<WakeUp> {
+  const raw = await readJson(settingsFile(dataDir)).catch(() => undefined);
+  const settings = SettingsSchema.safeParse(raw);
+  return settings.success ? settings.data.wakeUp : "ask";
+}
+
+export async function openHostStore(config: StoreConfig): Promise<HostStore> {
+  const paths = layout(config);
+  const linkFile = config.linkFile ?? link;
+  await mkdir(paths.scope, { recursive: true, mode: DIR_MODE });
+  await mkdir(paths.staging, { recursive: true, mode: DIR_MODE });
+  await purgeStale(paths.staging);
+  await purgeStale(paths.trash);
+  const read = reader(paths);
+
+  return {
+    ...read,
+    ...noteWriter(config, paths, read),
+
+    resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
     async reopen(id, resolvedAt) {
       const thread = await read.get(id);
@@ -502,16 +558,13 @@ export async function openHostStore(config: StoreConfig): Promise<HostStore> {
     wakeUp: () => readWakeUp(config.dataDir),
 
     async setWakeUp(value) {
-      // Fichier temporaire dans .staging (purgé s'il reste), puis rename : un lecteur voit l'ancien ou le nouveau.
-      const tmp = join(paths.staging, `settings.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
-      await writeFile(tmp, JSON.stringify({ schemaVersion: 1, wakeUp: value }, null, 2), { mode: FILE_MODE });
-      try {
-        await renameRetry(tmp, settingsFile(config.dataDir));
-      } catch (error) {
-        await unlink(tmp).catch(() => undefined);
-        throw error;
-      }
+      await replaceFile(paths, settingsFile(config.dataDir), JSON.stringify({ schemaVersion: 1, wakeUp: value }, null, 2));
       return readWakeUp(config.dataDir);
+    },
+
+    async setDesktopSend(on) {
+      await replaceFile(paths, featuresFile(config.dataDir), JSON.stringify({ schemaVersion: 1, desktopSend: on }, null, 2));
+      return readDesktopSend(config.dataDir);
     },
 
     watch(onChange) {
@@ -571,6 +624,7 @@ export async function openAgentStore(config: StoreConfig): Promise<AgentStore> {
 
   return {
     ...read,
+    ...noteWriter(config, paths, read),
     resolve: (id, reply, by) => writeResolution(paths, read, id, reply, by, linkFile),
 
     async clear(filter) {

@@ -59,7 +59,7 @@ export const NewAnnotationSchema = z.object({
   scope: z.literal("local"),
   createdAt: z.iso.datetime(),
   author: AuthorSchema,
-  source: z.object({ kind: z.literal("extension"), trust: z.literal("owner") }),
+  source: z.object({ kind: z.enum(["extension", "mcp"]), trust: z.literal("owner") }),
   page: z.object({ url: clip(2000), title: clip(300) }),
   mark: z.object({
     kind: z.enum(["element", "region"]),
@@ -77,9 +77,9 @@ export const NewAnnotationSchema = z.object({
     rectInAnchor: RectSchema,
     drawing: z.array(z.unknown()).max(MAX_STROKES).optional().transform((raw) => (raw ? sanitizeStrokes(raw) : undefined)),
   }),
-  viewport: z.object({ width: finite, height: finite, devicePixelRatio: finite, scrollX: finite, scrollY: finite }),
+  viewport: z.object({ width: finite, height: finite, devicePixelRatio: finite, scrollX: finite, scrollY: finite }).optional(),
   comment: z.string().min(1).max(COMMENT_MAX),
-  captures: z.object({ zone: CaptureMetaSchema, context: CaptureMetaSchema }),
+  captures: z.object({ zone: CaptureMetaSchema.optional(), context: CaptureMetaSchema.optional() }),
 });
 
 export const AnnotationSchema = NewAnnotationSchema.extend({
@@ -140,7 +140,15 @@ export const ExtensionToHostSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("listeners"), requestId: z.number().int(), url: z.string().max(2000) }),
   z.object({ type: z.literal("getWakeUp"), requestId: z.number().int() }),
   z.object({ type: z.literal("setWakeUp"), requestId: z.number().int(), wakeUp: z.enum(WAKE_UPS) }),
+  z.object({ type: z.literal("getDesktopSend"), requestId: z.number().int() }),
+  z.object({ type: z.literal("setDesktopSend"), requestId: z.number().int(), on: z.boolean() }),
 ]);
 
 /** <dataDir>/settings.json. Tout autre contenu se lit comme absent (réveil « ask »). */
 export const SettingsSchema = z.strictObject({ schemaVersion: z.literal(1), wakeUp: z.enum(WAKE_UPS) });
+
+/**
+ * <dataDir>/features.json, à part de settings.json : la 0.4.0 lit settings.json en strict et
+ * remettrait le réveil à « ask » devant une clé inconnue. Tout autre contenu se lit comme « off ».
+ */
+export const FeaturesSchema = z.strictObject({ schemaVersion: z.literal(1), desktopSend: z.boolean() });

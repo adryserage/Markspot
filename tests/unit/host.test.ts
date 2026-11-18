@@ -26,11 +26,13 @@ function collect(stream: PassThrough): () => unknown[] {
 
 const thread = { annotation: { id: "01JD8000000000000000000001", seq: 1 }, resolution: null } as unknown as Thread;
 
-function fakeStore(): HostStore & { emit(change: ThreadChange): void; saved: WakeUp[] } {
+function fakeStore(): HostStore & { emit(change: ThreadChange): void; saved: WakeUp[]; desktop: boolean[] } {
   let listener: (c: ThreadChange) => void = () => {};
   const saved: WakeUp[] = [];
+  const desktop: boolean[] = [];
   return {
     saved,
+    desktop,
     list: async () => [thread],
     get: async () => thread,
     capture: async () => new Uint8Array([7, 8]),
@@ -46,6 +48,11 @@ function fakeStore(): HostStore & { emit(change: ThreadChange): void; saved: Wak
     setWakeUp: async (value) => {
       saved.push(value);
       return value;
+    },
+    desktopSend: async () => desktop.at(-1) ?? false,
+    setDesktopSend: async (on) => {
+      desktop.push(on);
+      return on;
     },
     watch(onChange) {
       listener = onChange;
@@ -167,5 +174,26 @@ test("another caller cannot change the wake-up choice", async () => {
   assert.deepEqual(store.saved, []);
   assert.deepEqual(received(), [
     { type: "rejected", requestId: null, reason: "unexpected caller chrome-extension://someoneelse/" },
+  ]);
+});
+
+test("host reads and saves the Claude Desktop option, and refuses anything but a boolean", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const received = collect(output);
+  const store = fakeStore();
+  const done = runHost(options(input, output, store));
+  input.write(frame({ type: "getDesktopSend", requestId: 1 }));
+  input.write(frame({ type: "setDesktopSend", requestId: 2, on: true }));
+  input.write(frame({ type: "setDesktopSend", requestId: 3, on: "yes" }));
+  input.write(frame({ type: "getDesktopSend", requestId: 4 }));
+  input.end();
+  assert.equal(await done, 0);
+  assert.deepEqual(store.desktop, [true]);
+  assert.deepEqual(received(), [
+    { type: "desktopSend", requestId: 1, on: false },
+    { type: "desktopSend", requestId: 2, on: true },
+    { type: "rejected", requestId: 3, reason: "invalid message" },
+    { type: "desktopSend", requestId: 4, on: true },
   ]);
 });

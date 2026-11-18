@@ -98,6 +98,7 @@ export const en = {
   "overlay.note": "Note {seq}",
   "overlay.claudeReply": "Claude's reply",
   "overlay.resolvedByYou": "Resolved by you",
+  "overlay.author": "From {name}",
   "overlay.confirmDelete": "Confirm delete",
 
   // Dessin
@@ -138,6 +139,7 @@ export const en = {
   "worker.wakeAsk": "Ask each time",
   "worker.wakeOn": "Always",
   "worker.wakeOff": "Never",
+  "worker.desktopSend": "Claude Desktop can send notes",
 
   // Page d'export
   "export.pageTitle": "Export Markspot notes",
@@ -241,6 +243,7 @@ export const fr = {
   "overlay.note": "Note {seq}",
   "overlay.claudeReply": "Réponse de Claude",
   "overlay.resolvedByYou": "Réglée par toi",
+  "overlay.author": "De {name}",
   "overlay.confirmDelete": "Confirmer la suppression",
 
   "draw.arrow": "Flèche",
@@ -279,6 +282,7 @@ export const fr = {
   "worker.wakeAsk": "Demander à chaque fois",
   "worker.wakeOn": "Toujours",
   "worker.wakeOff": "Jamais",
+  "worker.desktopSend": "Claude Desktop peut envoyer des notes",
 
   "export.pageTitle": "Exporter les notes Markspot",
   "export.heading": "Exporter les notes",

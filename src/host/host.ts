@@ -170,6 +170,12 @@ async function handle(
     case "setWakeUp":
       send({ type: "wakeUp", requestId: message.requestId, wakeUp: await store.setWakeUp(message.wakeUp) });
       return;
+    case "getDesktopSend":
+      send({ type: "desktopSend", requestId: message.requestId, on: await store.desktopSend() });
+      return;
+    case "setDesktopSend":
+      send({ type: "desktopSend", requestId: message.requestId, on: await store.setDesktopSend(message.on) });
+      return;
     case "capture": {
       const png = await store.capture(message.id, "zone");
       const fits = png !== null && png.length * 1.34 < MAX_CAPTURE_TO_EXTENSION;

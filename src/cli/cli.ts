@@ -131,6 +131,7 @@ async function main(argv: string[]): Promise<number> {
         get dispatches() {
           return dispatches;
         },
+        desktopSend: await store.desktopSend(),
       });
       // connect() et non serveStdio() : Claude Code n'accepte les canaux qu'avec l'ancienne
       // ouverture du protocole, que serveStdio ne propose pas.

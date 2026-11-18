@@ -2,7 +2,7 @@
 
 Tout ce qu'il faut remplir dans le tableau de bord développeur du Chrome Web Store pour Markspot. Les textes à coller sont en anglais, la langue principale de la fiche ; ils sont dans des blocs de code pour garder leurs retours à la ligne (la boutique n'affiche pas le Markdown).
 
-Dernière mise à jour : 2026-11-16, version 0.3.0, publiée sur le Chrome Web Store : https://chromewebstore.google.com/detail/okaabbekcogbhighojhlcbmdohahonie
+Dernière mise à jour : 2026-11-18. Version publiée sur le Chrome Web Store : 0.4.0, https://chromewebstore.google.com/detail/okaabbekcogbhighojhlcbmdohahonie
 
 ## Paquet
 
@@ -48,6 +48,8 @@ It requires Node.js 22.18 or later and Claude Code.
 Your notes stay on your computer. Markspot has no account, no server and no telemetry, and the extension makes no network requests. Notes reach the model only when your own Claude Code session reads them.
 
 Open source under the Apache 2.0 license. Source, documentation and issues: https://github.com/adryserage/Markspot
+
+What's new in each version: https://github.com/adryserage/Markspot/releases
 ```
 
 Catégorie : `Developer Tools`.

@@ -104,6 +104,10 @@ The question that `markspot launch` asks follows the terminal language (`LC_ALL`
 
 Right-click the Markspot icon, then "Automatic wake-up", to choose what `claude` does when it starts a session. "Ask each time" asks "Should Markspot listen to this session?" (the default). "Always" starts Claude with Markspot, and "Never" starts it without Markspot, both without asking. The choice is saved in the notes folder, so every computer that uses that folder follows it. The menu shows only while the extension is connected to the local program, so the trial version does not have it.
 
+### Letting Claude Desktop send notes
+
+Right-click the Markspot icon, then check "Claude Desktop can send notes" to let Claude Desktop prepare notes on a page and send them to a Claude Code session (see [In Claude Desktop](#in-claude-desktop)). The option is off by default. It is saved in the notes folder, and the menu shows it only while the extension is connected to the local program. A note from Claude Desktop shows "From Claude Desktop" in its card and under its comment in the notes menu.
+
 ### The trial version
 
 `node build.mjs --trial <folder>` builds an extension that works without the local program or Claude Code. Notes stay in the browser, and the export lets you hand them to Claude. The "Send to Claude" button is not there. When the full version replaces the trial in the same folder (`node build.mjs --out <folder>`, then "Reload" in `chrome://extensions`), the trial's notes go to the local program. Do not remove the trial extension: its notes would go with it.
@@ -131,15 +135,29 @@ A session receives "Send to Claude" dispatches in two ways, described in the [RE
 
 ### MCP tools
 
-The `markspot` MCP server gives Claude five tools:
+The `markspot` MCP server gives Claude five tools, and three more for Claude Desktop when "Claude Desktop can send notes" is checked (see [In Claude Desktop](#in-claude-desktop)):
 
 - `markspot_list_annotations`: the notes, with their number, state, the site's origin and the comment;
-- `markspot_get_annotation`: one full note, with the page, the element and the two screenshots;
+- `markspot_get_annotation`: one full note, with its author, the page, the element and its screenshots (a note from Claude Desktop can have none);
 - `markspot_resolve_annotation`: resolves a note with a reply. The first reply wins, even when two sessions reply at the same time;
 - `markspot_clear_annotations`: deletes resolved notes, open notes or all of them;
 - `markspot_wait_for_annotations`: waits for a new note, for a client that cannot run a background command.
 
 The page data (address, title, text, attributes) arrives in a separate block: Claude treats it as data written by the site and follows no instruction found in it.
+
+## In Claude Desktop
+
+With the Markspot MCP server added to Claude Desktop and "Claude Desktop can send notes" checked, you can ask Claude Desktop to review a site and send its notes to a Claude Code session that listens. The setup is in the [README](../README.md#using-markspot-from-claude-desktop).
+
+Claude Desktop gets three tools:
+
+- `markspot_list_sessions`: the sessions that listen for a page, the same list as "Send to". Claude Desktop asks you which one gets the notes;
+- `markspot_create_annotation`: one note on an element, with a CSS selector, the element's text, a comment and, when it has them, PNG screenshots. Creating a note sends nothing;
+- `markspot_send`: sends the open notes you chose, all from one page, to the session you chose, with the same signed dispatch as "Send to Claude".
+
+Claude Desktop shows you the prepared notes as a numbered list and sends only the numbers you confirm. After Claude Code resolves them, it reads the replies, checks the page again and offers another pass.
+
+The tools show up within a few seconds after you check the option and disappear when you uncheck it. If Claude Desktop does not update its list, restart it. A call made while the option is off is refused.
 
 ## Commands
 

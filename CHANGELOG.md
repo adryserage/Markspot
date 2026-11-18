@@ -2,6 +2,18 @@
 
 Français : [CHANGELOG.fr.md](CHANGELOG.fr.md)
 
+## 0.5.0 (2026-11-18)
+
+### Added
+
+- Claude Desktop can review a site and send its notes to one of your Claude Code sessions. Turn on "Claude Desktop can send notes" in the right-click menu of the toolbar icon (off by default), then add the Markspot MCP server to Claude Desktop. Claude Desktop gets three tools: `markspot_list_sessions`, `markspot_create_annotation` and `markspot_send`. It asks which session gets the notes, shows the prepared notes as a numbered list, sends only the numbers you confirm, then reads the replies and checks the page again. The option is saved in the notes folder, in `features.json`.
+- A note from Claude Desktop shows "From Claude Desktop" in its card and in the notes menu, and Claude Code reads it as a suggestion from Claude Desktop. Such a note can have no screenshot. Every computer that shares the notes folder needs Markspot 0.5.0 or later to read these notes.
+
+### Fixed
+
+- Right after Chrome woke the extension up, "Send to Claude" could answer "Not sent: no open note received by the local program" and the page could show fewer pins, because the extension had not reloaded its notes from the local program yet. It now waits for that reload, up to 3 seconds.
+- `markspot install` kept the MCP server registered in Claude Code with an old path, for example after a move from a git clone to the npm package. Deleting the clone then broke Claude Code ("Couldn't reconnect to markspot"). `install` now compares the registered Node and `cli.js` with the current ones and registers the server again when they differ, and `markspot doctor` shows the step as missing.
+
 ## 0.4.0 (2026-11-17)
 
 ### Added
